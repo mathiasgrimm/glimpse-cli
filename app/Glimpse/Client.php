@@ -1,0 +1,113 @@
+<?php
+
+namespace App\Glimpse;
+
+use App\Enums\ImageFormat;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Http;
+
+final class Client
+{
+    public function __construct(private readonly Config $config) {}
+
+    public function convert(string $bytes, ImageFormat $format): ImageResult
+    {
+        return ImageResult::fromResponse($this->post('/v1/convert', ['format' => $format->value], $bytes));
+    }
+
+    public function optimize(string $bytes, ?int $quality = null): ImageResult
+    {
+        return ImageResult::fromResponse($this->post('/v1/optimize', ['quality' => $quality], $bytes));
+    }
+
+    public function resize(string $bytes, ?int $width = null, ?int $height = null): ImageResult
+    {
+        return ImageResult::fromResponse($this->post('/v1/resize', ['width' => $width, 'height' => $height], $bytes));
+    }
+
+    public function thumbnail(string $bytes, ?int $width = null, ?int $height = null, ?int $quality = null): ImageResult
+    {
+        return ImageResult::fromResponse($this->post('/v1/thumbnail', ['width' => $width, 'height' => $height, 'quality' => $quality], $bytes));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function info(string $bytes): array
+    {
+        return $this->post('/v1/info', [], $bytes);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function user(?string $token = null): array
+    {
+        $response = $this->request($token ?? $this->requireToken())->get('/user');
+
+        $user = $this->guard($response)->json();
+
+        return is_array($user) ? $user : [];
+    }
+
+    /**
+     * @param  array<string, int|string|null>  $params
+     * @return array<string, mixed>
+     */
+    private function post(string $path, array $params, string $bytes): array
+    {
+        $payload = [
+            'input' => ['type' => 'BASE64', 'data' => base64_encode($bytes)],
+        ] + array_filter($params, fn ($value) => $value !== null);
+
+        $response = $this->request($this->requireToken())->post($path, $payload);
+
+        $data = $this->guard($response)->json('data');
+
+        return is_array($data) ? $data : [];
+    }
+
+    private function request(string $token): PendingRequest
+    {
+        return Http::baseUrl($this->config->apiUrl())
+            ->withToken($token)
+            ->acceptJson()
+            ->connectTimeout(10)
+            ->timeout(120);
+    }
+
+    private function guard(Response $response): Response
+    {
+        if ($response->status() === 401) {
+            throw new AuthException('Invalid or missing token. Run: glimpse auth');
+        }
+
+        if ($response->status() === 422) {
+            $message = $response->json('message');
+            $errors = $response->json('errors');
+
+            throw new ValidationException(
+                is_string($message) && $message !== '' ? $message : 'The request was invalid.',
+                is_array($errors) ? $errors : [],
+            );
+        }
+
+        if ($response->failed()) {
+            $message = $response->json('message');
+
+            throw new ApiException(sprintf(
+                'API error (%d)%s',
+                $response->status(),
+                is_string($message) && $message !== '' ? ': '.$message : '',
+            ));
+        }
+
+        return $response;
+    }
+
+    private function requireToken(): string
+    {
+        return $this->config->token() ?? throw new AuthException('Not authenticated. Run: glimpse auth');
+    }
+}
