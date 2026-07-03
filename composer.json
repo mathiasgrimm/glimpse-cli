@@ -1,0 +1,62 @@
+{
+    "name": "glimpseimg/cli",
+    "description": "CLI client for the Glimpse image API.",
+    "keywords": ["glimpse", "image", "cli", "convert", "optimize", "resize", "thumbnail"],
+    "type": "project",
+    "license": "MIT",
+    "support": {
+        "issues": "https://github.com/Art-Commerce-Systems/glimpse-cli/issues",
+        "source": "https://github.com/Art-Commerce-Systems/glimpse-cli"
+    },
+    "authors": [
+        {
+            "name": "Mathias Grimm",
+            "email": "mathiasgrimm@gmail.com"
+        }
+    ],
+    "require": {
+        "php": "^8.2",
+        "illuminate/http": "^12.17",
+        "laravel-zero/framework": "^12.0.2"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.29",
+        "mockery/mockery": "^1.6.12",
+        "pestphp/pest": "^3.8.4|^4.1.2",
+        "phpstan/phpstan": "^2.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "lint": "pint --parallel",
+        "lint:check": "pint --parallel --test",
+        "types:check": "phpstan analyse",
+        "test": [
+            "@lint:check",
+            "@types:check",
+            "@php vendor/bin/pest"
+        ],
+        "ci:check": [
+            "@test"
+        ]
+    },
+    "config": {
+        "preferred-install": "dist",
+        "sort-packages": true,
+        "optimize-autoloader": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "bin": ["glimpse"]
+}
