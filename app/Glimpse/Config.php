@@ -14,6 +14,11 @@ final class Config
             return $env;
         }
 
+        return $this->storedToken();
+    }
+
+    public function storedToken(): ?string
+    {
         $token = $this->read()['token'] ?? null;
 
         return is_string($token) ? $token : null;
