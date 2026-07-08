@@ -1,45 +1,58 @@
 <?php
 
-/*
-|--------------------------------------------------------------------------
-| Test Case
-|--------------------------------------------------------------------------
-|
-| The closure you provide to your test functions is always bound to a specific PHPUnit test
-| case class. By default, that class is "PHPUnit\Framework\TestCase". Of course, you may
-| need to change it using the "uses()" function to bind a different classes or traits.
-|
-*/
+use Illuminate\Support\Facades\File;
+use Tests\Fixtures\Images;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class)->in('Feature');
+uses(TestCase::class)
+    ->beforeEach(function () {
+        $this->configHome = sys_get_temp_dir().'/glimpse-cli-test-'.bin2hex(random_bytes(6));
 
-/*
-|--------------------------------------------------------------------------
-| Expectations
-|--------------------------------------------------------------------------
-|
-| When you're writing tests, you often need to check that values meet certain conditions. The
-| "expect()" function gives you access to a set of "expectations" methods that you can use
-| to assert different things. Of course, you may extend the Expectation API at any time.
-|
-*/
+        putenv('XDG_CONFIG_HOME='.$this->configHome);
+        putenv('GLIMPSE_TOKEN');
+        putenv('GLIMPSE_API_URL');
+    })
+    ->afterEach(function () {
+        if ($this->configHome !== '' && is_dir($this->configHome)) {
+            File::deleteDirectory($this->configHome);
+        }
 
-expect()->extend('toBeOne', function () {
-    return $this->toBe(1);
-});
+        putenv('XDG_CONFIG_HOME');
+        putenv('GLIMPSE_TOKEN');
+        putenv('GLIMPSE_API_URL');
+    })
+    ->in('Feature', 'Unit');
 
-/*
-|--------------------------------------------------------------------------
-| Functions
-|--------------------------------------------------------------------------
-|
-| While Pest is very powerful out-of-the-box, you may have some testing code specific to your
-| project that you don't want to repeat in every file. Here you can also expose helpers as
-| global functions to help you to reduce the number of lines of code in your test files.
-|
-*/
-
-function something(): void
+/**
+ * Write a PNG fixture into the test workspace and return its path.
+ */
+function createImage(string $name = 'photo.png'): string
 {
-    // ..
+    $dir = test()->configHome.'/workspace';
+
+    if (! is_dir($dir)) {
+        mkdir($dir, 0755, true);
+    }
+
+    $path = $dir.'/'.$name;
+    file_put_contents($path, Images::png());
+
+    return $path;
+}
+
+/**
+ * A canned successful transform-endpoint response envelope.
+ *
+ * @return array{data: array<string, mixed>}
+ */
+function fakeTransformResponse(string $format = 'jpg', string $mimeType = 'image/jpeg'): array
+{
+    return ['data' => [
+        'output' => ['type' => 'BASE64', 'data' => Images::JPG_BASE64],
+        'format' => $format,
+        'mime_type' => $mimeType,
+        'size' => strlen(Images::jpg()),
+        'width' => 1280,
+        'height' => 720,
+    ]];
 }
