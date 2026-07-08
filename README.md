@@ -29,6 +29,12 @@ Once published to Packagist, installation will be:
 composer global require glimpseimg/cli
 ```
 
+The distributed `glimpse` binary is a compiled PHAR (`builds/glimpse`), so end users never see the framework's development commands, and standalone installs can update in place:
+
+```bash
+glimpse self-update
+```
+
 ## Authentication
 
 Create an API token in the Glimpse web app under **Settings > API Tokens**, then run:
@@ -113,6 +119,16 @@ cat photo.png | glimpse convert - --format=webp -o photo.webp
 ```bash
 composer test        # Pint (check), PHPStan, and the Pest suite
 ```
+
+### Releasing
+
+```bash
+php glimpse app:build glimpse --build-version=X.Y.Z
+git add builds/glimpse && git commit -m "Build vX.Y.Z"
+git tag vX.Y.Z && git push --tags
+```
+
+`self-update` discovers versions through Packagist and downloads `builds/glimpse` from the matching tag, so committing the fresh build before tagging is what ships it.
 
 ## License
 
