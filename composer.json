@@ -1,7 +1,7 @@
 {
     "name": "glimpseimg/cli",
     "description": "CLI client for the Glimpse image API.",
-    "keywords": ["glimpse", "image", "cli", "convert", "optimize", "resize", "thumbnail"],
+    "keywords": ["glimpse", "image", "cli", "convert", "optimize", "resize", "thumbnail", "jpg", "jpeg", "gif", "png", "webp", "avif"],
     "type": "project",
     "license": "MIT",
     "support": {
