@@ -66,6 +66,8 @@ Environment variables override the stored config, which is handy for CI and loca
 
 All commands accept a file path as input, or `-` to read from stdin. Output defaults to a file next to the input; pass `--output=-` (short form `-o-`) to write the raw image bytes to stdout. Use `--json` for machine-readable metadata and `--force` to overwrite an existing output file.
 
+Pass `--in-place` (short form `-i`) to write the result over the input file instead of creating a suffixed sibling. When `convert` changes the format, the input is replaced by a file with the new extension (`a.jpg` → `a.avif`); overwriting the input itself never needs `--force`, but overwriting a *different* existing file (an already-present `a.avif`, say) still does.
+
 ### Convert
 
 ```bash
