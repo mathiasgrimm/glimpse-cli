@@ -11,6 +11,8 @@ class ConvertCommand extends GlimpseCommand
     protected $signature = 'convert
         {input : Path to the image, or - for stdin}
         {--format= : Target format (jpg, png, webp, gif, avif); inferred from --output when omitted}
+        {--optimize : Run the optimizer chain on the converted image}
+        {--quality= : Re-encode quality 1-100; requires --optimize (defaults to 85)}
         {--o|output= : Output path, or - for stdout}
         {--i|in-place : Replace the input file with the converted image, deleting the original}
         {--json : Print the result metadata as JSON}
@@ -24,6 +26,12 @@ class ConvertCommand extends GlimpseCommand
             $input = $this->inputArgument();
             $output = $this->resolveOutput($input);
             $format = $this->resolveFormat($output);
+            $optimize = (bool) $this->option('optimize');
+            $quality = $this->intOption('quality');
+
+            if ($quality !== null && ! $optimize) {
+                throw new ApiException('--quality requires --optimize.');
+            }
 
             if ($this->inPlace()) {
                 $target = $this->defaultOutputPath($input, null, $format->value);
@@ -33,7 +41,7 @@ class ConvertCommand extends GlimpseCommand
                 }
             }
 
-            $result = $client->convert($this->readImage($input), $format);
+            $result = $client->convert($this->readImage($input), $format, $optimize, $quality);
 
             $path = $this->writeResult($input, $output, null, $result);
             $this->emit($result, $path);

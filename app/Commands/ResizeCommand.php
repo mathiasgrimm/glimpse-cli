@@ -11,6 +11,8 @@ class ResizeCommand extends GlimpseCommand
         {input : Path to the image, or - for stdin}
         {--width= : Maximum width in pixels}
         {--height= : Maximum height in pixels}
+        {--optimize : Run the optimizer chain on the resized image}
+        {--quality= : Re-encode quality 1-100; requires --optimize (defaults to 85)}
         {--o|output= : Output path, or - for stdout}
         {--i|in-place : Write the result over the input file}
         {--json : Print the result metadata as JSON}
@@ -30,7 +32,14 @@ class ResizeCommand extends GlimpseCommand
                 throw new ApiException('Provide --width and/or --height.');
             }
 
-            $result = $client->resize($this->readImage($input), $width, $height);
+            $optimize = (bool) $this->option('optimize');
+            $quality = $this->intOption('quality');
+
+            if ($quality !== null && ! $optimize) {
+                throw new ApiException('--quality requires --optimize.');
+            }
+
+            $result = $client->resize($this->readImage($input), $width, $height, $optimize, $quality);
 
             $path = $this->writeResult($input, $output, 'resized', $result);
             $this->emit($result, $path);

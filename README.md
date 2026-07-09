@@ -74,9 +74,13 @@ Pass `--in-place` (short form `-i`) to write the result over the input file inst
 glimpse convert photo.png --format=webp          # writes photo.webp
 glimpse convert photo.png -o hero.avif           # format inferred from the extension
 glimpse convert photo.png --format=avif -i       # replaces photo.png with photo.avif
+glimpse convert photo.png --format=webp --optimize              # optimizes the converted image
+glimpse convert photo.png --format=webp --optimize --quality=70 # lossy re-encode at quality 70
 ```
 
 Supported formats: `jpg`, `png`, `webp`, `gif`, `avif`.
+
+`--optimize` runs the converted image through the optimizer chain (the result is never larger than without it). `--quality` (1-100, default 85) requires `--optimize`.
 
 ### Optimize
 
@@ -94,7 +98,10 @@ Fits the image into a bounding box, preserving aspect ratio and never upscaling.
 glimpse resize photo.jpg --width=800             # writes photo.resized.jpg
 glimpse resize photo.jpg --width=800 --height=600
 glimpse resize photo.jpg --width=800 -i          # shrinks photo.jpg itself
+glimpse resize photo.jpg --width=800 --optimize --quality=70    # resize, then lossy re-encode
 ```
+
+`--optimize` and `--quality` work the same as on `convert`: `--optimize` runs the resized image through the optimizer chain, and `--quality` (1-100, default 85) requires `--optimize`.
 
 ### Thumbnail
 

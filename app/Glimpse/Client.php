@@ -11,9 +11,13 @@ final class Client
 {
     public function __construct(private readonly Config $config) {}
 
-    public function convert(string $bytes, ImageFormat $format): ImageResult
+    public function convert(string $bytes, ImageFormat $format, bool $optimize = false, ?int $quality = null): ImageResult
     {
-        return ImageResult::fromResponse($this->post('/v1/convert', ['format' => $format->value], $bytes));
+        return ImageResult::fromResponse($this->post('/v1/convert', [
+            'format' => $format->value,
+            'optimize' => $optimize ?: null,
+            'quality' => $quality,
+        ], $bytes));
     }
 
     public function optimize(string $bytes, ?int $quality = null): ImageResult
@@ -21,9 +25,14 @@ final class Client
         return ImageResult::fromResponse($this->post('/v1/optimize', ['quality' => $quality], $bytes));
     }
 
-    public function resize(string $bytes, ?int $width = null, ?int $height = null): ImageResult
+    public function resize(string $bytes, ?int $width = null, ?int $height = null, bool $optimize = false, ?int $quality = null): ImageResult
     {
-        return ImageResult::fromResponse($this->post('/v1/resize', ['width' => $width, 'height' => $height], $bytes));
+        return ImageResult::fromResponse($this->post('/v1/resize', [
+            'width' => $width,
+            'height' => $height,
+            'optimize' => $optimize ?: null,
+            'quality' => $quality,
+        ], $bytes));
     }
 
     public function thumbnail(string $bytes, ?int $width = null, ?int $height = null, ?int $quality = null): ImageResult
@@ -52,7 +61,7 @@ final class Client
     }
 
     /**
-     * @param  array<string, int|string|null>  $params
+     * @param  array<string, int|string|bool|null>  $params
      * @return array<string, mixed>
      */
     private function post(string $path, array $params, string $bytes): array
