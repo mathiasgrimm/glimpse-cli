@@ -51,6 +51,46 @@ test('--in-place replaces the input when the API returns a different format', fu
         ->and(file_exists($input))->toBeFalse();
 });
 
+test('--optimize sends optimize without quality', function () {
+    Http::fake(['*/v1/resize' => Http::response(fakeTransformResponse())]);
+
+    $this->artisan('resize', ['input' => createImage('photo.png'), '--width' => '800', '--optimize' => true])
+        ->assertExitCode(0);
+
+    Http::assertSent(fn (Request $request) => $request['optimize'] === true
+        && ! array_key_exists('quality', $request->data()));
+});
+
+test('--optimize with --quality sends both', function () {
+    Http::fake(['*/v1/resize' => Http::response(fakeTransformResponse())]);
+
+    $this->artisan('resize', ['input' => createImage('photo.png'), '--width' => '800', '--optimize' => true, '--quality' => '70'])
+        ->assertExitCode(0);
+
+    Http::assertSent(fn (Request $request) => $request['optimize'] === true
+        && $request['quality'] === 70);
+});
+
+test('omits optimize and quality from the payload when the flags are not given', function () {
+    Http::fake(['*/v1/resize' => Http::response(fakeTransformResponse())]);
+
+    $this->artisan('resize', ['input' => createImage('photo.png'), '--width' => '800'])
+        ->assertExitCode(0);
+
+    Http::assertSent(fn (Request $request) => ! array_key_exists('optimize', $request->data())
+        && ! array_key_exists('quality', $request->data()));
+});
+
+test('--quality without --optimize fails before any HTTP request', function () {
+    Http::fake();
+
+    $this->artisan('resize', ['input' => createImage('photo.png'), '--width' => '800', '--quality' => '70'])
+        ->expectsOutputToContain('--quality requires --optimize.')
+        ->assertExitCode(1);
+
+    Http::assertNothingSent();
+});
+
 test('requires at least one of --width or --height before any HTTP request', function () {
     Http::fake();
 

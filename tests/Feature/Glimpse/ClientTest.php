@@ -33,6 +33,43 @@ test('convert posts the base64 envelope and returns a decoded ImageResult', func
     });
 });
 
+test('convert sends optimize and quality when given', function () {
+    Http::fake(['*/v1/convert' => Http::response(fakeTransformResponse())]);
+
+    app(Client::class)->convert(Images::png(), ImageFormat::Jpg, optimize: true, quality: 60);
+
+    Http::assertSent(fn (Request $request) => $request['optimize'] === true
+        && $request['quality'] === 60);
+});
+
+test('convert omits optimize and quality from the payload by default', function () {
+    Http::fake(['*/v1/convert' => Http::response(fakeTransformResponse())]);
+
+    app(Client::class)->convert(Images::png(), ImageFormat::Jpg);
+
+    Http::assertSent(fn (Request $request) => ! array_key_exists('optimize', $request->data())
+        && ! array_key_exists('quality', $request->data()));
+});
+
+test('resize sends optimize and quality when given', function () {
+    Http::fake(['*/v1/resize' => Http::response(fakeTransformResponse())]);
+
+    app(Client::class)->resize(Images::png(), width: 800, optimize: true, quality: 60);
+
+    Http::assertSent(fn (Request $request) => $request['width'] === 800
+        && $request['optimize'] === true
+        && $request['quality'] === 60);
+});
+
+test('resize omits optimize and quality from the payload by default', function () {
+    Http::fake(['*/v1/resize' => Http::response(fakeTransformResponse())]);
+
+    app(Client::class)->resize(Images::png(), width: 800);
+
+    Http::assertSent(fn (Request $request) => ! array_key_exists('optimize', $request->data())
+        && ! array_key_exists('quality', $request->data()));
+});
+
 test('optimize omits quality from the payload when not given', function () {
     Http::fake(['*/v1/optimize' => Http::response(fakeTransformResponse())]);
 

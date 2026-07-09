@@ -40,6 +40,46 @@ test('infers the format from the output path extension', function () {
     Http::assertSent(fn (Request $request) => $request['format'] === 'webp');
 });
 
+test('--optimize sends optimize without quality', function () {
+    Http::fake(['*/v1/convert' => Http::response(fakeTransformResponse('webp', 'image/webp'))]);
+
+    $this->artisan('convert', ['input' => createImage('photo.png'), '--format' => 'webp', '--optimize' => true])
+        ->assertExitCode(0);
+
+    Http::assertSent(fn (Request $request) => $request['optimize'] === true
+        && ! array_key_exists('quality', $request->data()));
+});
+
+test('--optimize with --quality sends both', function () {
+    Http::fake(['*/v1/convert' => Http::response(fakeTransformResponse('webp', 'image/webp'))]);
+
+    $this->artisan('convert', ['input' => createImage('photo.png'), '--format' => 'webp', '--optimize' => true, '--quality' => '70'])
+        ->assertExitCode(0);
+
+    Http::assertSent(fn (Request $request) => $request['optimize'] === true
+        && $request['quality'] === 70);
+});
+
+test('omits optimize and quality from the payload when the flags are not given', function () {
+    Http::fake(['*/v1/convert' => Http::response(fakeTransformResponse('webp', 'image/webp'))]);
+
+    $this->artisan('convert', ['input' => createImage('photo.png'), '--format' => 'webp'])
+        ->assertExitCode(0);
+
+    Http::assertSent(fn (Request $request) => ! array_key_exists('optimize', $request->data())
+        && ! array_key_exists('quality', $request->data()));
+});
+
+test('--quality without --optimize fails before any HTTP request', function () {
+    Http::fake();
+
+    $this->artisan('convert', ['input' => createImage('photo.png'), '--format' => 'webp', '--quality' => '70'])
+        ->expectsOutputToContain('--quality requires --optimize.')
+        ->assertExitCode(1);
+
+    Http::assertNothingSent();
+});
+
 test('errors when neither --format nor a recognizable output extension is given', function () {
     Http::fake();
 
