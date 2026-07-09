@@ -18,18 +18,20 @@ enum ImageFormat: string
     }
 
     /**
-     * Detect the format from raw image bytes by their magic numbers, or
-     * null when the bytes are not a supported image. Kept dependency-free
-     * on purpose: finfo needs a libmagic recent enough to know AVIF.
+     * Detect the format from raw image bytes, or null when the bytes are
+     * not a supported image. Mirrors the API's ImageFormat::tryFromBinary
+     * in name and contract, but sniffs magic numbers instead of finfo on
+     * purpose: the CLI runs on arbitrary machines, and finfo needs a
+     * libmagic recent enough to know AVIF.
      */
-    public static function fromBytes(string $bytes): ?self
+    public static function tryFromBinary(string $binary): ?self
     {
         return match (true) {
-            str_starts_with($bytes, "\xFF\xD8\xFF") => self::Jpg,
-            str_starts_with($bytes, "\x89PNG\r\n\x1A\n") => self::Png,
-            str_starts_with($bytes, 'GIF87a'), str_starts_with($bytes, 'GIF89a') => self::Gif,
-            str_starts_with($bytes, 'RIFF') && substr($bytes, 8, 4) === 'WEBP' => self::Webp,
-            substr($bytes, 4, 8) === 'ftypavif' => self::Avif,
+            str_starts_with($binary, "\xFF\xD8\xFF") => self::Jpg,
+            str_starts_with($binary, "\x89PNG\r\n\x1A\n") => self::Png,
+            str_starts_with($binary, 'GIF87a'), str_starts_with($binary, 'GIF89a') => self::Gif,
+            str_starts_with($binary, 'RIFF') && substr($binary, 8, 4) === 'WEBP' => self::Webp,
+            substr($binary, 4, 8) === 'ftypavif' => self::Avif,
             default => null,
         };
     }

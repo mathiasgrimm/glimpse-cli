@@ -20,7 +20,7 @@ class EstimateCommand extends GlimpseCommand
         return $this->runGuarded(function () use ($client) {
             $bytes = $this->readImage($this->inputArgument(), limitBytes: false);
 
-            $format = ImageFormat::fromBytes($bytes)
+            $format = ImageFormat::tryFromBinary($bytes)
                 ?? throw new ApiException('Unrecognized image format. Supported: jpg, png, webp, gif, avif.');
 
             [$width, $height] = $this->dimensions($bytes);
