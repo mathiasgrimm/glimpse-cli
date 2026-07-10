@@ -77,7 +77,7 @@ php glimpse --version
 
 ## Authentication
 
-Grab an API key on the free tier at [glimpseimg.com](https://glimpseimg.com) (**Settings → API Tokens**), then:
+Grab a free API key at [glimpseimg.com](https://glimpseimg.com) (**Settings → API Tokens**), then:
 
 ```bash
 glimpse auth
