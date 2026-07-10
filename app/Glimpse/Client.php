@@ -73,6 +73,22 @@ final class Client
     }
 
     /**
+     * Month-to-date usage for the token's current team: operation counts,
+     * bytes saved, and the average per-image size reduction, with the
+     * calendar-month window echoed in `period`.
+     *
+     * @return array<string, mixed>
+     */
+    public function usage(): array
+    {
+        $response = $this->request($this->requireToken())->get('/v1/usage');
+
+        $data = $this->guard($response)->json('data');
+
+        return is_array($data) ? $data : [];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function user(?string $token = null): array

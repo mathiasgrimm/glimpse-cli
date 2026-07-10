@@ -95,6 +95,23 @@ test('info returns the raw data object', function () {
         ->toBe(['format' => 'png', 'width' => 1, 'height' => 1]);
 });
 
+test('usage fetches the summary with the stored token', function () {
+    Http::fake(['*/v1/usage' => Http::response(['data' => [
+        'operations' => 68,
+        'bytes_saved' => 62111321,
+        'average_reduction' => 45,
+    ]])]);
+
+    $usage = app(Client::class)->usage();
+
+    expect($usage['operations'])->toBe(68)
+        ->and($usage['bytes_saved'])->toBe(62111321);
+
+    Http::assertSent(fn (Request $request) => $request->url() === 'https://glimpseimg.com/api/v1/usage'
+        && $request->method() === 'GET'
+        && $request->hasHeader('Authorization', 'Bearer test-token'));
+});
+
 test('user verifies an explicit token without touching the stored one', function () {
     Http::fake(['*/user' => Http::response(['name' => 'Mathias', 'email' => 'mathias@example.com'])]);
 
