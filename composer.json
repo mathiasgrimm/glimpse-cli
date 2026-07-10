@@ -14,8 +14,18 @@
             "email": "mathiasgrimm@gmail.com"
         }
     ],
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../glimpse-php",
+            "options": {
+                "symlink": false
+            }
+        }
+    ],
     "require": {
         "php": "^8.2",
+        "glimpseimg/glimpse-php": "@dev",
         "illuminate/http": "^12.17",
         "laravel-zero/framework": "^12.0.2",
         "laravel-zero/phar-updater": "^1.4",
