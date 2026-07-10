@@ -1,9 +1,10 @@
 <p align="center">
-  <a href="https://glimpseimg.com"><img src="art/banner.avif" alt="glimpse: the image API for developers, in your terminal" width="100%"></a>
+  <a href="https://glimpseimg.com"><img src="art/banner.avif" alt="glimpse: ship smaller images, skip the toolchain" width="100%"></a>
 </p>
 
 <p align="center">
-  Convert, optimize, resize, thumbnail and inspect images from your terminal.<br>
+  Ship smaller images. Skip the toolchain.<br>
+  Convert, optimize, resize, thumbnail, analyze and inspect images from your terminal.<br>
   The first-party CLI for <a href="https://glimpseimg.com"><strong>glimpseimg.com</strong></a>, the image API for developers.
 </p>
 
@@ -26,10 +27,10 @@ glimpse convert banner.png --format=avif
 ```
 
 ```
-Wrote banner.avif (image/avif, 23.1 KB, 3200x840)
+Wrote banner.avif (image/avif, 24.2 KB, 3200x840)
 ```
 
-That's a real session: `banner.png` is a frame of the banner at the top of this page, re-encoded from 348.3 KB down to 23.1 KB. The banner you are actually looking at goes one step further; it is a two-frame animated AVIF (watch the green dot blink) that glimpse converted from a GIF, 40.1 KB in total. Want to know what a conversion will buy you *before* you convert? `glimpse analyze` predicts the output size for every format **without uploading your image**:
+That's a real session: `banner.png` is a frame of the banner at the top of this page, re-encoded from 360.3 KB down to 24.2 KB. The banner you are actually looking at goes one step further; it is a two-frame animated AVIF (watch the green dot blink) that glimpse converted from a GIF, 40.1 KB in total. Want to know what a conversion will buy you *before* you convert? `glimpse analyze` predicts the output size for every format **without uploading your image**:
 
 <p align="center">
   <img src="art/terminal.avif" alt="glimpse analyze and convert running in a terminal" width="100%">
@@ -40,7 +41,7 @@ That's a real session: `banner.png` is a frame of the banner at the top of this 
 - **Zero image binaries.** No ImageMagick, no libvips, no format-specific encoders to install, pin, or debug across machines. If it runs PHP 8.2, it runs glimpse.
 - **One command per job.** `convert`, `optimize`, `resize`, `thumbnail`, `analyze` and `info` are small, predictable commands that do one thing well.
 - **5 output formats.** JPG, PNG, WebP, GIF and AVIF. Input types are verified from the actual bytes, never a filename.
-- **Analyze before you convert.** `glimpse analyze` predicts per-format savings from metadata and a local sample probe, for a single image or a whole directory tree. The image itself is never uploaded.
+- **Know before you convert.** `glimpse analyze` predicts per-format savings from metadata and a local sample probe, for a single image or a whole directory tree. The image itself is never uploaded.
 - **Built for pipelines.** Reads stdin, writes stdout, `--json` on every command, and human summaries go to STDERR so your pipes stay clean.
 - **Safe by default.** Never overwrites an existing file without `--force`; the optimizer never returns a file larger than its input.
 - **Stateless by design.** One request in, one image out. Nothing is stored server-side.
@@ -77,7 +78,7 @@ php glimpse --version
 
 ## Authentication
 
-Grab a free API key at [glimpseimg.com](https://glimpseimg.com) (**Settings → API Tokens**), then:
+Grab a free API key at [glimpseimg.com](https://glimpseimg.com) (**Settings → API Tokens**). glimpse is free while we finish billing, and there will always be a free tier. Then:
 
 ```bash
 glimpse auth
@@ -156,22 +157,22 @@ glimpse thumbnail photo.jpg -i                   # turns photo.jpg itself into t
 
 ### Analyze
 
-Predicts the converted size for every format so you can pick a target *before* spending a conversion. Your image is never uploaded. Only its metadata (format, size, dimensions) plus an optional locally computed sample probe are sent.
+Know before you convert: `analyze` predicts the converted size for every format so you can pick a target *before* spending a conversion. Your image is never uploaded. Only its metadata (format, size, dimensions) plus an optional locally computed sample probe are sent.
 
 ```bash
 glimpse analyze banner.png
 ```
 
 ```
-Source: PNG, 348.3 KB, 3200x840, sampled
+Source: PNG, 360.3 KB, 3200x840, sampled
 
 +--------+----------------+----------+---------+---------+
 | Format | Estimated size | Saved    | Saved % | Quality |
 +--------+----------------+----------+---------+---------+
-| JPG    | ~135.3 KB      | 213 KB   | 61.2%   | 85      |
-| PNG    | ~156.7 KB      | 191.6 KB | 55%     | -       |
-| WEBP   | ~75.1 KB       | 273.2 KB | 78.4%   | 85      |
-| AVIF   | ~37.6 KB       | 310.7 KB | 89.2%   | 85      |
+| JPG    | ~145.9 KB      | 214.4 KB | 59.5%   | 85      |
+| PNG    | ~162.1 KB      | 198.2 KB | 55%     | -       |
+| WEBP   | ~81.1 KB       | 279.2 KB | 77.5%   | 85      |
+| AVIF   | ~40.5 KB       | 319.8 KB | 88.7%   | 85      |
 +--------+----------------+----------+---------+---------+
 Estimates are heuristics for picking a target format, not guarantees.
 ```
@@ -198,7 +199,7 @@ Installing `ext-imagick` (or `ext-gd`) sharpens the estimates considerably: the 
 
 ### Check
 
-The CI gate. `check` scans a directory (or a single file), estimates the best-format saving for every image, and lists only the ones that would benefit from optimization. It exits `1` when any image is over the threshold, so your pipeline fails until the images are optimized. Like `analyze`, nothing is uploaded.
+Fail the build, not your users. `check` is the CI gate: it scans a directory (or a single file), estimates the best-format saving for every image, and lists only the ones that would benefit from optimization. It exits `1` when any image is over the threshold, so your pipeline fails until the images are optimized. Like `analyze`, nothing is uploaded.
 
 ```bash
 glimpse check .                                  # fail if any image could save 10% or more
