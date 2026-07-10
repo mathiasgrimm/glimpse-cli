@@ -106,11 +106,11 @@ Pass `--in-place` (short form `-i`) to write the result over the input file inst
 ### Convert
 
 ```bash
-glimpse convert photo.png --format=webp          # writes photo.webp
-glimpse convert photo.png -o hero.avif           # format inferred from the extension
-glimpse convert photo.png --format=avif -i       # replaces photo.png with photo.avif
-glimpse convert photo.png --format=webp --optimize              # optimizes the converted image
-glimpse convert photo.png --format=webp --optimize --quality=70 # lossy re-encode at quality 70
+glimpse convert photo.png --format=webp                          # writes photo.webp
+glimpse convert photo.png -o hero.avif                           # format inferred from the extension
+glimpse convert photo.png --format=avif -i                       # replaces photo.png with photo.avif
+glimpse convert photo.png --format=webp --optimize               # optimizes the converted image
+glimpse convert photo.png --format=webp --optimize --quality=70  # lossy re-encode at quality 70
 ```
 
 Supported formats: `jpg`, `png`, `webp`, `gif`, `avif`.
@@ -130,10 +130,10 @@ glimpse optimize photo.jpg --in-place            # optimizes photo.jpg itself
 Fits the image into a bounding box, preserving aspect ratio and never upscaling.
 
 ```bash
-glimpse resize photo.jpg --width=800             # writes photo.resized.jpg
+glimpse resize photo.jpg --width=800                           # writes photo.resized.jpg
 glimpse resize photo.jpg --width=800 --height=600
-glimpse resize photo.jpg --width=800 -i          # shrinks photo.jpg itself
-glimpse resize photo.jpg --width=800 --optimize --quality=70    # resize, then lossy re-encode
+glimpse resize photo.jpg --width=800 -i                        # shrinks photo.jpg itself
+glimpse resize photo.jpg --width=800 --optimize --quality=70   # resize, then lossy re-encode
 ```
 
 `--optimize` and `--quality` work the same as on `convert`.
