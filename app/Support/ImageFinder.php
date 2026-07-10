@@ -15,7 +15,10 @@ final class ImageFinder
      * Find every image file under the directory, recursively, sorted by
      * pathname. Dot entries (directories and files) are skipped: .git is
      * never wanted, and macOS AppleDouble files (._photo.jpg) carry image
-     * extensions without being images.
+     * extensions without being images. Symlinked directories (Laravel's
+     * public/storage) are skipped too: the iterator will not recurse into
+     * them, and letting them through yields the link itself as if it were
+     * a file. Symlinks to image files still resolve normally.
      *
      * @return list<string>
      */
@@ -28,7 +31,11 @@ final class ImageFinder
                     return false;
                 }
 
-                return $file->isDir() || ImageFormat::fromExtension($file->getExtension()) !== null;
+                if ($file->isDir()) {
+                    return ! $file->isLink();
+                }
+
+                return ImageFormat::fromExtension($file->getExtension()) !== null;
             },
         ));
 

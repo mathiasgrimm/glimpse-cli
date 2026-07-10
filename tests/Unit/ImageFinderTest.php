@@ -34,6 +34,19 @@ test('skips dot-directories and dot-files', function () {
     expect((new ImageFinder)->find(workspace()))->toBe([workspace().'/photo.png']);
 });
 
+test('skips symlinked directories but follows symlinked image files', function () {
+    createImage('photo.png');
+    $outside = createImage('../outside/linked.png');
+
+    symlink(dirname($outside), workspace().'/storage');
+    symlink($outside, workspace().'/alias.png');
+
+    expect((new ImageFinder)->find(workspace()))->toBe([
+        workspace().'/alias.png',
+        workspace().'/photo.png',
+    ]);
+});
+
 test('returns an empty list for a directory with no images', function () {
     createImage('readme.md', 'text');
 
