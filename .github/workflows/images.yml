@@ -11,15 +11,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          path: glimpse-cli
-
-      # The composer path repository at ../glimpse-php needs the SDK
-      # checkout next to the CLI until the SDK is on Packagist.
-      - uses: actions/checkout@v4
-        with:
-          repository: mathiasgrimm/glimpse-php
-          path: glimpse-php
 
       - uses: shivammathur/setup-php@v2
         with:
@@ -28,10 +19,8 @@ jobs:
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
-        working-directory: glimpse-cli
 
       - name: Check images
         run: ./glimpse check .
-        working-directory: glimpse-cli
         env:
           GLIMPSE_TOKEN: ${{ secrets.GLIMPSE_TOKEN }}
