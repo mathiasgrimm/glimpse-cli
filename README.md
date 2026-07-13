@@ -187,6 +187,7 @@ Point it at a directory and glimpse scans every image in it, recursively, behind
 ```bash
 glimpse analyze assets/ --format=avif            # what would AVIF buy, file by file
 glimpse analyze assets/                          # best format per image
+glimpse analyze assets/ --update-baseline        # record the results as the baseline
 ```
 
 <p align="center">
@@ -233,6 +234,35 @@ public/build/
 
 Patterns are relative to the scanned directory. Negated patterns (`!logo.gif`) re-include files, with the same caveat as git: a file inside an ignored directory cannot be re-included. `analyze <dir>` honors the same file.
 
+#### .glimpse-baseline
+
+Adopting glimpse in an existing project should not require converting every image on day one. A `.glimpse-baseline` file at the scan root records files you have already dealt with, so `check <dir>` and `analyze <dir>` skip them and only new or changed images get flagged. It is the same idea as phpstan's baseline: accept the current state, gate everything from here on.
+
+Generate it by scanning the directory:
+
+```bash
+glimpse analyze assets/ --update-baseline
+```
+
+The file lists each image with its size and content hash:
+
+```json
+{
+    "files": {
+        "photos/hero.png": {
+            "size": 482133,
+            "xxh128": "5f3d0a9c1b2e4d6f8a7c9e0b1d2f3a4c"
+        }
+    }
+}
+```
+
+An image is skipped only while its content still matches the recorded entry. Replace a baselined file with a new version and it re-enters the scan automatically. Where `.glimpseignore` says "never look at these paths", the baseline says "these exact file contents are already handled".
+
+`convert` and `optimize` keep an existing baseline current: when they write an image inside a directory that has a `.glimpse-baseline` (they search upward from the input, like git finds `.git`), the result and its source are recorded automatically. They never create the file; that is `--update-baseline`'s job. Re-running `analyze <dir> --update-baseline` refreshes changed entries and prunes deleted files.
+
+The baseline only applies to directory scans. Naming a file explicitly (`glimpse analyze photo.png`) always analyzes it. Commit the file so CI and your teammates share the same starting point.
+
 ### Info
 
 ```bash
@@ -277,7 +307,7 @@ jobs:
           GLIMPSE_TOKEN: ${{ secrets.GLIMPSE_TOKEN }}
 ```
 
-GitHub's `ubuntu-latest` runners ship PHP out of the box, so the PHAR runs as-is. Exclude paths you do not control (vendored packages, generated assets) with a [`.glimpseignore`](#glimpseignore) file at the repo root, and tune the failure bar with `--threshold`. When the check fails, fix it by running the optimizer locally:
+GitHub's `ubuntu-latest` runners ship PHP out of the box, so the PHAR runs as-is. Exclude paths you do not control (vendored packages, generated assets) with a [`.glimpseignore`](#glimpseignore) file at the repo root, and tune the failure bar with `--threshold`. Rolling glimpse out on a repo full of legacy images? Commit a [`.glimpse-baseline`](#glimpse-baseline) so the gate only fails on new or changed files. When the check fails, fix it by running the optimizer locally:
 
 ```bash
 glimpse optimize path/to/offender.png --in-place

@@ -172,6 +172,84 @@ test('passes when .glimpseignore excludes every offender', function () {
     Http::assertNothingSent();
 });
 
+test('passes when the baseline covers every offender', function () {
+    fakeAnalyze();
+    writeBaseline(['photo.png' => baselineEntry(createImage('photo.png'))]);
+
+    $exitCode = Artisan::call('check', ['input' => workspace()]);
+
+    expect($exitCode)->toBe(0)
+        ->and(Artisan::output())->toContain('All 1 images are covered by the baseline.');
+
+    Http::assertNothingSent();
+});
+
+test('fails again when a baselined file changed', function () {
+    fakeAnalyze();
+    $path = createImage('photo.png');
+    $entry = baselineEntry($path);
+    $entry['xxh128'] = 'stale';
+
+    writeBaseline(['photo.png' => $entry]);
+
+    $exitCode = Artisan::call('check', ['input' => workspace()]);
+
+    expect($exitCode)->toBe(1)
+        ->and(Artisan::output())->toContain('1 of 1 images need optimization');
+});
+
+test('reports the baseline-skipped count alongside remaining offenders', function () {
+    fakeAnalyze();
+    createImage('photo.png');
+    writeBaseline(['covered.png' => baselineEntry(createImage('covered.png'))]);
+
+    $exitCode = Artisan::call('check', ['input' => workspace()]);
+    $output = Artisan::output();
+
+    expect($exitCode)->toBe(1)
+        ->and($output)->toContain('1 of 1 images need optimization')
+        ->and($output)->toContain('1 file(s) skipped by baseline.');
+
+    Http::assertSentCount(1);
+});
+
+test('an explicit single file is checked even when baselined', function () {
+    fakeAnalyze();
+    $path = createImage('photo.png');
+    writeBaseline(['photo.png' => baselineEntry($path)]);
+
+    $exitCode = Artisan::call('check', ['input' => $path]);
+
+    expect($exitCode)->toBe(1);
+
+    Http::assertSentCount(1);
+});
+
+test('a malformed baseline fails loudly before any HTTP request', function () {
+    fakeAnalyze();
+    createImage('photo.png');
+    file_put_contents(workspace().'/.glimpse-baseline', '{nope');
+
+    $this->artisan('check', ['input' => workspace()])
+        ->expectsOutputToContain('Malformed')
+        ->assertExitCode(1);
+
+    Http::assertNothingSent();
+});
+
+test('the json report includes the baseline-skipped count', function () {
+    fakeAnalyze();
+    createImage('photo.png');
+    writeBaseline(['covered.png' => baselineEntry(createImage('covered.png'))]);
+
+    $exitCode = Artisan::call('check', ['input' => workspace(), '--json' => true]);
+    $decoded = json_decode(Artisan::output(), true);
+
+    expect($exitCode)->toBe(1)
+        ->and($decoded['total'])->toBe(1)
+        ->and($decoded['baseline_skipped'])->toBe(1);
+});
+
 test('fails with an auth error when no token is configured', function () {
     fakeAnalyze();
     putenv('GLIMPSE_TOKEN');

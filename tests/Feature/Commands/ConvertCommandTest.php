@@ -259,6 +259,68 @@ test('errors on a missing input file', function () {
     Http::assertNothingSent();
 });
 
+test('records the source and output in an existing baseline', function () {
+    Http::fake(['*/v1/convert' => Http::response(fakeTransformResponse('webp', 'image/webp'))]);
+
+    $input = createImage('photo.png');
+    writeBaseline([]);
+
+    $this->artisan('convert', ['input' => $input, '--format' => 'webp'])
+        ->assertExitCode(0);
+
+    expect(readBaseline()['files'])->toBe([
+        'photo.png' => baselineEntry($input),
+        'photo.webp' => baselineEntry(dirname($input).'/photo.webp'),
+    ]);
+});
+
+test('walks up to the nearest baseline and records paths relative to it', function () {
+    Http::fake(['*/v1/convert' => Http::response(fakeTransformResponse('webp', 'image/webp'))]);
+
+    $input = createImage('nested/photo.png');
+    writeBaseline([]);
+
+    $this->artisan('convert', ['input' => $input, '--format' => 'webp'])
+        ->assertExitCode(0);
+
+    expect(array_keys(readBaseline()['files']))->toBe(['nested/photo.png', 'nested/photo.webp']);
+});
+
+test('creates no baseline when none exists', function () {
+    Http::fake(['*/v1/convert' => Http::response(fakeTransformResponse('webp', 'image/webp'))]);
+
+    $this->artisan('convert', ['input' => createImage('photo.png'), '--format' => 'webp'])
+        ->assertExitCode(0);
+
+    expect(file_exists(workspace().'/.glimpse-baseline'))->toBeFalse();
+});
+
+test('--in-place with an extension change records only the output', function () {
+    Http::fake(['*/v1/convert' => Http::response(fakeTransformResponse('webp', 'image/webp'))]);
+
+    $input = createImage('photo.png');
+    writeBaseline([]);
+
+    $this->artisan('convert', ['input' => $input, '--format' => 'webp', '--in-place' => true])
+        ->assertExitCode(0);
+
+    expect(readBaseline()['files'])->toBe([
+        'photo.webp' => baselineEntry(dirname($input).'/photo.webp'),
+    ]);
+});
+
+test('an output outside the baseline root records only the source', function () {
+    Http::fake(['*/v1/convert' => Http::response(fakeTransformResponse('webp', 'image/webp'))]);
+
+    $input = createImage('photo.png');
+    writeBaseline([]);
+
+    $this->artisan('convert', ['input' => $input, '--output' => test()->configHome.'/outside.webp'])
+        ->assertExitCode(0);
+
+    expect(array_keys(readBaseline()['files']))->toBe(['photo.png']);
+});
+
 test('rejects inputs over the 15 MiB limit before any HTTP request', function () {
     Http::fake();
 

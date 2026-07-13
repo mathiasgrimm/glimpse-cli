@@ -36,6 +36,44 @@ test('--in-place overwrites the input file without --force', function () {
         ->and(file_exists(dirname($input).'/photo.optimized.png'))->toBeFalse();
 });
 
+test('records the source and output in an existing baseline', function () {
+    Http::fake(['*/v1/optimize' => Http::response(fakeTransformResponse())]);
+
+    $input = createImage('photo.png');
+    writeBaseline([]);
+
+    $this->artisan('optimize', ['input' => $input])
+        ->assertExitCode(0);
+
+    expect(readBaseline()['files'])->toBe([
+        'photo.optimized.jpg' => baselineEntry(dirname($input).'/photo.optimized.jpg'),
+        'photo.png' => baselineEntry($input),
+    ]);
+});
+
+test('--in-place records the overwritten input with its new content', function () {
+    Http::fake(['*/v1/optimize' => Http::response(fakeTransformResponse('png', 'image/png'))]);
+
+    $input = createImage('photo.png');
+    writeBaseline([]);
+
+    $this->artisan('optimize', ['input' => $input, '--in-place' => true])
+        ->assertExitCode(0);
+
+    expect(readBaseline()['files'])->toBe([
+        'photo.png' => baselineEntry($input),
+    ]);
+});
+
+test('creates no baseline when none exists', function () {
+    Http::fake(['*/v1/optimize' => Http::response(fakeTransformResponse())]);
+
+    $this->artisan('optimize', ['input' => createImage('photo.png')])
+        ->assertExitCode(0);
+
+    expect(file_exists(workspace().'/.glimpse-baseline'))->toBeFalse();
+});
+
 test('rejects a non-numeric quality before any HTTP request', function () {
     Http::fake();
 

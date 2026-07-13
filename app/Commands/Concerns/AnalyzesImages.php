@@ -2,6 +2,7 @@
 
 namespace App\Commands\Concerns;
 
+use App\Support\BaselineFile;
 use GlimpseImg\ApiException;
 use GlimpseImg\AuthException;
 use GlimpseImg\Client;
@@ -20,7 +21,7 @@ trait AnalyzesImages
      */
     private function analyzeFile(Client $client, SampleProbe $probe, string $dir, string $path, ?ImageFormat $target, ?int $quality): array
     {
-        $file = ltrim(substr($path, strlen(rtrim($dir, '/'))), '/');
+        $file = $this->relativeTo($dir, $path);
 
         try {
             $bytes = $this->readImage($path, limitBytes: false);
@@ -42,6 +43,28 @@ trait AnalyzesImages
         } catch (ApiException $exception) {
             return ['file' => $file, 'error' => $exception->getMessage()];
         }
+    }
+
+    private function relativeTo(string $dir, string $path): string
+    {
+        return ltrim(substr($path, strlen(rtrim($dir, '/'))), '/');
+    }
+
+    /**
+     * Split the found files into the ones still to analyze and the count
+     * covered by the baseline.
+     *
+     * @param  list<string>  $files
+     * @return array{list<string>, int}
+     */
+    private function partitionByBaseline(BaselineFile $baseline, string $dir, array $files): array
+    {
+        $remaining = array_values(array_filter(
+            $files,
+            fn (string $path) => ! $baseline->skips($this->relativeTo($dir, $path), $path),
+        ));
+
+        return [$remaining, count($files) - count($remaining)];
     }
 
     /**

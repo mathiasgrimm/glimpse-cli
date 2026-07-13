@@ -2,12 +2,15 @@
 
 namespace App\Commands;
 
+use App\Commands\Concerns\UpdatesBaseline;
 use GlimpseImg\ApiException;
 use GlimpseImg\Client;
 use GlimpseImg\ImageFormat;
 
 class ConvertCommand extends GlimpseCommand
 {
+    use UpdatesBaseline;
+
     protected $signature = 'convert
         {input : Path to the image, or - for stdin}
         {--format= : Target format (jpg, png, webp, gif, avif); inferred from --output when omitted}
@@ -44,6 +47,7 @@ class ConvertCommand extends GlimpseCommand
             $result = $client->convert($this->readImage($input), $format, $optimize, $quality);
 
             $path = $this->writeResult($input, $output, null, $result);
+            $this->recordInBaseline($input, $path);
             $this->emit($result, $path);
 
             return self::SUCCESS;

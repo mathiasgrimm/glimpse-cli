@@ -265,3 +265,130 @@ test('prints a batch json object with files and totals', function () {
         ->and($decoded['totals']['failed'])->toBe(1)
         ->and($decoded['totals']['source_size'])->toBe(70);
 });
+
+test('directory scans skip files covered by the baseline', function () {
+    createImage('a.png');
+    writeBaseline(['covered.png' => baselineEntry(createImage('covered.png'))]);
+
+    $exitCode = Artisan::call('analyze', ['input' => workspace()]);
+    $output = Artisan::output();
+
+    expect($exitCode)->toBe(0)
+        ->and($output)->toContain('a.png')
+        ->and($output)->not->toContain('covered.png')
+        ->and($output)->toContain('Total: 1 files')
+        ->and($output)->toContain('1 file(s) skipped by baseline.');
+
+    Http::assertSentCount(1);
+});
+
+test('a baselined file whose content changed is analyzed again', function () {
+    $path = createImage('photo.png');
+    $entry = baselineEntry($path);
+    $entry['xxh128'] = 'stale';
+
+    writeBaseline(['photo.png' => $entry]);
+
+    $exitCode = Artisan::call('analyze', ['input' => workspace()]);
+    $output = Artisan::output();
+
+    expect($exitCode)->toBe(0)
+        ->and($output)->toContain('photo.png')
+        ->and($output)->not->toContain('skipped by baseline');
+
+    Http::assertSentCount(1);
+});
+
+test('passes when the baseline covers every image in the directory', function () {
+    writeBaseline(['photo.png' => baselineEntry(createImage('photo.png'))]);
+
+    $exitCode = Artisan::call('analyze', ['input' => workspace()]);
+
+    expect($exitCode)->toBe(0)
+        ->and(Artisan::output())->toContain('All 1 images are covered by the baseline.');
+
+    Http::assertNothingSent();
+});
+
+test('an explicit single file is analyzed even when baselined', function () {
+    $path = createImage('photo.png');
+    writeBaseline(['photo.png' => baselineEntry($path)]);
+
+    $exitCode = Artisan::call('analyze', ['input' => $path]);
+
+    expect($exitCode)->toBe(0);
+
+    Http::assertSentCount(1);
+});
+
+test('--update-baseline records the scanned files at the scan root', function () {
+    createImage('b.png');
+    createImage('nested/a.png');
+
+    $exitCode = Artisan::call('analyze', ['input' => workspace(), '--update-baseline' => true]);
+    $baseline = readBaseline();
+
+    expect($exitCode)->toBe(0)
+        ->and(Artisan::output())->toContain('Baseline updated: 2 files (.glimpse-baseline).')
+        ->and(array_keys($baseline['files']))->toBe(['b.png', 'nested/a.png'])
+        ->and($baseline['files']['b.png'])->toBe(baselineEntry(workspace().'/b.png'))
+        ->and($baseline['files']['nested/a.png'])->toBe(baselineEntry(workspace().'/nested/a.png'));
+});
+
+test('--update-baseline keeps valid entries without re-analyzing and prunes deleted files', function () {
+    $covered = createImage('covered.png');
+    createImage('new.png');
+
+    writeBaseline([
+        'covered.png' => baselineEntry($covered),
+        'deleted.png' => ['size' => 1, 'xxh128' => 'gone'],
+    ]);
+
+    $exitCode = Artisan::call('analyze', ['input' => workspace(), '--update-baseline' => true]);
+
+    expect($exitCode)->toBe(0)
+        ->and(array_keys(readBaseline()['files']))->toBe(['covered.png', 'new.png']);
+
+    Http::assertSentCount(1);
+});
+
+test('--update-baseline does not record files that failed to analyze', function () {
+    createImage('good.png');
+    createImage('bad.png', 'not an image');
+
+    $exitCode = Artisan::call('analyze', ['input' => workspace(), '--update-baseline' => true]);
+
+    expect($exitCode)->toBe(0)
+        ->and(array_keys(readBaseline()['files']))->toBe(['good.png']);
+});
+
+test('--update-baseline requires a directory input', function () {
+    $this->artisan('analyze', ['input' => createImage(), '--update-baseline' => true])
+        ->expectsOutputToContain('--update-baseline requires a directory input.')
+        ->assertExitCode(1);
+
+    Http::assertNothingSent();
+});
+
+test('a malformed baseline fails loudly before any HTTP request', function () {
+    createImage('photo.png');
+    file_put_contents(workspace().'/.glimpse-baseline', '{nope');
+
+    $this->artisan('analyze', ['input' => workspace()])
+        ->expectsOutputToContain('Malformed')
+        ->assertExitCode(1);
+
+    Http::assertNothingSent();
+});
+
+test('the batch json includes the baseline-skipped count', function () {
+    createImage('a.png');
+    writeBaseline(['covered.png' => baselineEntry(createImage('covered.png'))]);
+
+    $exitCode = Artisan::call('analyze', ['input' => workspace(), '--json' => true]);
+    $decoded = json_decode(Artisan::output(), true);
+
+    expect($exitCode)->toBe(0)
+        ->and($decoded['files'])->toHaveCount(1)
+        ->and($decoded['baseline_skipped'])->toBe(1);
+});

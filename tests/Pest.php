@@ -1,5 +1,6 @@
 <?php
 
+use App\Support\BaselineFile;
 use Illuminate\Support\Facades\File;
 use Tests\Fixtures\Images;
 use Tests\TestCase;
@@ -47,6 +48,50 @@ function createImage(string $name = 'photo.png', ?string $contents = null): stri
     file_put_contents($path, $contents ?? Images::png());
 
     return $path;
+}
+
+/**
+ * Write a .glimpse-baseline into the directory (the test workspace by
+ * default). Entries map relative paths to size/xxh128 pairs; build
+ * current-content entries with baselineEntry().
+ *
+ * @param  array<string, array{size: int, xxh128: string}>  $files
+ */
+function writeBaseline(array $files, ?string $directory = null): void
+{
+    $directory ??= workspace();
+
+    if (! is_dir($directory)) {
+        mkdir($directory, 0755, true);
+    }
+
+    file_put_contents(
+        $directory.'/'.BaselineFile::FILENAME,
+        json_encode(['files' => $files === [] ? new stdClass : $files], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES).PHP_EOL,
+    );
+}
+
+/**
+ * The baseline entry matching a file's current content.
+ *
+ * @return array{size: int, xxh128: string}
+ */
+function baselineEntry(string $path): array
+{
+    return ['size' => (int) filesize($path), 'xxh128' => (string) hash_file('xxh128', $path)];
+}
+
+/**
+ * Decode the .glimpse-baseline in the directory (the test workspace by
+ * default).
+ *
+ * @return array{files: array<string, array{size: int, xxh128: string}>}
+ */
+function readBaseline(?string $directory = null): array
+{
+    $path = ($directory ?? workspace()).'/'.BaselineFile::FILENAME;
+
+    return json_decode((string) file_get_contents($path), true);
 }
 
 /**
