@@ -7,7 +7,7 @@ use App\Support\BaselineFile;
 trait UpdatesBaseline
 {
     /**
-     * Keep an existing .glimpse-baseline current after writing an output
+     * Keep an existing .glimpse-baseline.json current after writing an output
      * image: the nearest baseline up from the input gains entries for the
      * written file and for the source when it still exists (an in-place
      * write that changed the extension deletes it). A baseline is never

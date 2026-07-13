@@ -292,7 +292,7 @@ test('creates no baseline when none exists', function () {
     $this->artisan('convert', ['input' => createImage('photo.png'), '--format' => 'webp'])
         ->assertExitCode(0);
 
-    expect(file_exists(workspace().'/.glimpse-baseline'))->toBeFalse();
+    expect(file_exists(workspace().'/.glimpse-baseline.json'))->toBeFalse();
 });
 
 test('--in-place with an extension change records only the output', function () {

@@ -6,7 +6,7 @@ use GlimpseImg\ApiException;
 use stdClass;
 
 /**
- * A .glimpse-baseline file: a JSON list of already-processed files at the
+ * A .glimpse-baseline.json file: a JSON list of already-processed files at the
  * scan root, so analyze and check skip them. Entries match on relative
  * path plus size plus xxh128 content hash; a file whose content changed
  * re-enters the scan. The hash is for change detection, not security, so
@@ -14,7 +14,7 @@ use stdClass;
  */
 final class BaselineFile
 {
-    public const FILENAME = '.glimpse-baseline';
+    public const FILENAME = '.glimpse-baseline.json';
 
     /**
      * @param  array<string, array{size: int, xxh128: string}>  $files

@@ -228,7 +228,7 @@ test('an explicit single file is checked even when baselined', function () {
 test('a malformed baseline fails loudly before any HTTP request', function () {
     fakeAnalyze();
     createImage('photo.png');
-    file_put_contents(workspace().'/.glimpse-baseline', '{nope');
+    file_put_contents(workspace().'/.glimpse-baseline.json', '{nope');
 
     $this->artisan('check', ['input' => workspace()])
         ->expectsOutputToContain('Malformed')

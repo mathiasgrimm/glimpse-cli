@@ -51,7 +51,7 @@ function createImage(string $name = 'photo.png', ?string $contents = null): stri
 }
 
 /**
- * Write a .glimpse-baseline into the directory (the test workspace by
+ * Write a .glimpse-baseline.json into the directory (the test workspace by
  * default). Entries map relative paths to size/xxh128 pairs; build
  * current-content entries with baselineEntry().
  *
@@ -82,7 +82,7 @@ function baselineEntry(string $path): array
 }
 
 /**
- * Decode the .glimpse-baseline in the directory (the test workspace by
+ * Decode the .glimpse-baseline.json in the directory (the test workspace by
  * default).
  *
  * @return array{files: array<string, array{size: int, xxh128: string}>}

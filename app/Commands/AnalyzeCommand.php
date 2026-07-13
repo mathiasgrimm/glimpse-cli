@@ -20,7 +20,7 @@ class AnalyzeCommand extends GlimpseCommand
         {--format= : Only show estimates for this target format (jpg, png, webp, gif, avif)}
         {--optimize : Assume the optimizer chain runs on the re-encode}
         {--quality= : Assumed re-encode quality 1-100, perceptual scale; requires --optimize (defaults to 85)}
-        {--update-baseline : Record the scanned files into .glimpse-baseline at the scan root}
+        {--update-baseline : Record the scanned files into .glimpse-baseline.json at the scan root}
         {--json : Print the estimates as JSON}';
 
     protected $description = 'Analyze converted sizes without uploading the image';

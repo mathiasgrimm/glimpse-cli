@@ -329,7 +329,7 @@ test('--update-baseline records the scanned files at the scan root', function ()
     $baseline = readBaseline();
 
     expect($exitCode)->toBe(0)
-        ->and(Artisan::output())->toContain('Baseline updated: 2 files (.glimpse-baseline).')
+        ->and(Artisan::output())->toContain('Baseline updated: 2 files (.glimpse-baseline.json).')
         ->and(array_keys($baseline['files']))->toBe(['b.png', 'nested/a.png'])
         ->and($baseline['files']['b.png'])->toBe(baselineEntry(workspace().'/b.png'))
         ->and($baseline['files']['nested/a.png'])->toBe(baselineEntry(workspace().'/nested/a.png'));
@@ -372,7 +372,7 @@ test('--update-baseline requires a directory input', function () {
 
 test('a malformed baseline fails loudly before any HTTP request', function () {
     createImage('photo.png');
-    file_put_contents(workspace().'/.glimpse-baseline', '{nope');
+    file_put_contents(workspace().'/.glimpse-baseline.json', '{nope');
 
     $this->artisan('analyze', ['input' => workspace()])
         ->expectsOutputToContain('Malformed')

@@ -71,7 +71,7 @@ test('creates no baseline when none exists', function () {
     $this->artisan('optimize', ['input' => createImage('photo.png')])
         ->assertExitCode(0);
 
-    expect(file_exists(workspace().'/.glimpse-baseline'))->toBeFalse();
+    expect(file_exists(workspace().'/.glimpse-baseline.json'))->toBeFalse();
 });
 
 test('rejects a non-numeric quality before any HTTP request', function () {
