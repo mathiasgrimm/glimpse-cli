@@ -9,6 +9,7 @@ use App\Support\Paths;
 use GlimpseImg\ApiException;
 use GlimpseImg\Client;
 use GlimpseImg\SampleProbe;
+use Illuminate\Support\Str;
 
 class CheckCommand extends GlimpseCommand
 {
@@ -40,7 +41,7 @@ class CheckCommand extends GlimpseCommand
                 $this->option('json')
                     ? $this->emitJson([], [], 0, $threshold, $skipped)
                     : $this->info($skipped > 0
-                        ? "All {$skipped} images are covered by the baseline."
+                        ? $this->allCoveredMessage($skipped)
                         : "No images found in {$input}.");
 
                 return self::SUCCESS;
@@ -128,18 +129,22 @@ class CheckCommand extends GlimpseCommand
             ], $offenders));
 
             $this->error(sprintf(
-                '%d of %d images need optimization (threshold: %s%%).',
+                '%d of %d %s %s optimization (threshold: %s%%).',
                 count($offenders),
                 $total,
+                Str::plural('image', $total),
+                count($offenders) === 1 ? 'needs' : 'need',
                 $percent,
             ));
         } else {
-            $this->info("All {$total} images are within the {$percent}% threshold.");
+            $this->info($total === 1
+                ? "The 1 image is within the {$percent}% threshold."
+                : "All {$total} images are within the {$percent}% threshold.");
         }
 
         if ($failed !== []) {
             $this->newLine();
-            $this->error(count($failed).' file(s) could not be checked:');
+            $this->error(sprintf('%d %s could not be checked:', count($failed), Str::plural('file', count($failed))));
 
             foreach ($failed as $row) {
                 $this->line("  <fg=red>{$row['file']}</>: {$row['error']}");
@@ -147,7 +152,7 @@ class CheckCommand extends GlimpseCommand
         }
 
         if ($baselineSkipped > 0) {
-            $this->line("<fg=gray>{$baselineSkipped} file(s) skipped by baseline.</>");
+            $this->line($this->baselineSkippedLine($baselineSkipped));
         }
     }
 

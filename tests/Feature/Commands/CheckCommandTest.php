@@ -49,7 +49,7 @@ test('passes when every image is within the threshold', function () {
     $output = Artisan::output();
 
     expect($exitCode)->toBe(0)
-        ->and($output)->toContain('All 1 images are within the 10% threshold.')
+        ->and($output)->toContain('The 1 image is within the 10% threshold.')
         ->and($output)->not->toContain('photo.png');
 });
 
@@ -89,7 +89,7 @@ test('checks a single file by its basename', function () {
 
     expect($exitCode)->toBe(1)
         ->and($output)->toContain('photo.png')
-        ->and($output)->toContain('1 of 1 images need optimization');
+        ->and($output)->toContain('1 of 1 image needs optimization');
 });
 
 test('fails cleanly when the path does not exist', function () {
@@ -142,7 +142,7 @@ test('fails when a file cannot be checked', function () {
     $output = Artisan::output();
 
     expect($exitCode)->toBe(1)
-        ->and($output)->toContain('1 file(s) could not be checked:')
+        ->and($output)->toContain('1 file could not be checked:')
         ->and($output)->toContain('bad.png')
         ->and($output)->toContain('Unrecognized image format.');
 });
@@ -181,7 +181,7 @@ test('passes when the baseline covers every offender', function () {
     $exitCode = Artisan::call('check', ['input' => workspace()]);
 
     expect($exitCode)->toBe(0)
-        ->and(Artisan::output())->toContain('All 1 images are covered by the baseline.');
+        ->and(Artisan::output())->toContain('The 1 image is covered by the baseline.');
 
     Http::assertNothingSent();
 });
@@ -198,7 +198,7 @@ test('fails again when a baselined file changed', function () {
     $exitCode = Artisan::call('check', ['input' => workspace()]);
 
     expect($exitCode)->toBe(1)
-        ->and(Artisan::output())->toContain('1 of 1 images need optimization');
+        ->and(Artisan::output())->toContain('1 of 1 image needs optimization');
 });
 
 test('reports the baseline-skipped count alongside remaining offenders', function () {
@@ -211,8 +211,8 @@ test('reports the baseline-skipped count alongside remaining offenders', functio
     $output = Artisan::output();
 
     expect($exitCode)->toBe(1)
-        ->and($output)->toContain('1 of 1 images need optimization')
-        ->and($output)->toContain('1 file(s) skipped by baseline.');
+        ->and($output)->toContain('1 of 1 image needs optimization')
+        ->and($output)->toContain('1 file skipped by baseline.');
 
     Http::assertSentCount(1);
 });
@@ -252,7 +252,7 @@ test('the cwd baseline governs a subdirectory scan', function () {
     $exitCode = Artisan::call('check', ['input' => workspace().'/sub']);
 
     expect($exitCode)->toBe(0)
-        ->and(Artisan::output())->toContain('All 1 images are covered by the baseline.');
+        ->and(Artisan::output())->toContain('The 1 image is covered by the baseline.');
 
     Http::assertNothingSent();
 });
@@ -265,7 +265,7 @@ test('a baseline is not picked up from outside the current working directory', f
     $exitCode = Artisan::call('check', ['input' => workspace()]);
 
     expect($exitCode)->toBe(1)
-        ->and(Artisan::output())->toContain('1 of 1 images need optimization');
+        ->and(Artisan::output())->toContain('1 of 1 image needs optimization');
 
     Http::assertSentCount(1);
 });

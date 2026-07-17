@@ -10,6 +10,7 @@ use GlimpseImg\Client;
 use GlimpseImg\FrameCounter;
 use GlimpseImg\ImageFormat;
 use GlimpseImg\SampleProbe;
+use Illuminate\Support\Str;
 
 trait AnalyzesImages
 {
@@ -82,6 +83,24 @@ trait AnalyzesImages
         ));
 
         return [$remaining, count($files) - count($remaining)];
+    }
+
+    /**
+     * The summary line for a scan the baseline fully absorbed.
+     */
+    private function allCoveredMessage(int $count): string
+    {
+        return $count === 1
+            ? 'The 1 image is covered by the baseline.'
+            : "All {$count} images are covered by the baseline.";
+    }
+
+    /**
+     * The gray note counting files the baseline skipped.
+     */
+    private function baselineSkippedLine(int $count): string
+    {
+        return sprintf('<fg=gray>%d %s skipped by baseline.</>', $count, Str::plural('file', $count));
     }
 
     /**

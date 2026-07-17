@@ -10,6 +10,7 @@ use GlimpseImg\ApiException;
 use GlimpseImg\Client;
 use GlimpseImg\ImageFormat;
 use GlimpseImg\SampleProbe;
+use Illuminate\Support\Str;
 use Symfony\Component\Console\Helper\TableSeparator;
 
 class AnalyzeCommand extends GlimpseCommand
@@ -112,7 +113,7 @@ class AnalyzeCommand extends GlimpseCommand
         if ($files === []) {
             $this->option('json')
                 ? $this->emitBatchJson([], $skipped)
-                : $this->info("All {$skipped} images are covered by the baseline.");
+                : $this->info($this->allCoveredMessage($skipped));
 
             $this->updateBaseline($baseline, $root, '', []);
 
@@ -189,7 +190,7 @@ class AnalyzeCommand extends GlimpseCommand
         $baseline->save($root);
 
         if (! $this->option('json') && ($rows === [] || $recorded > 0)) {
-            $this->info(sprintf('Baseline updated: %d files (%s).', $baseline->count(), BaselineFile::FILENAME));
+            $this->info(sprintf('Baseline updated: %d %s (%s).', $baseline->count(), Str::plural('file', $baseline->count()), BaselineFile::FILENAME));
         }
     }
 
@@ -289,7 +290,7 @@ class AnalyzeCommand extends GlimpseCommand
         $this->line('<fg=gray>Estimates are heuristics for picking a target format, not guarantees.</>');
 
         if ($baselineSkipped > 0) {
-            $this->line("<fg=gray>{$baselineSkipped} file(s) skipped by baseline.</>");
+            $this->line($this->baselineSkippedLine($baselineSkipped));
         }
     }
 

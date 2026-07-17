@@ -279,7 +279,7 @@ test('directory scans skip files covered by the baseline', function () {
         ->and($output)->toContain('a.png')
         ->and($output)->not->toContain('covered.png')
         ->and($output)->toContain('Total: 1 files')
-        ->and($output)->toContain('1 file(s) skipped by baseline.');
+        ->and($output)->toContain('1 file skipped by baseline.');
 
     Http::assertSentCount(1);
 });
@@ -309,7 +309,7 @@ test('passes when the baseline covers every image in the directory', function ()
     $exitCode = Artisan::call('analyze', ['input' => workspace()]);
 
     expect($exitCode)->toBe(0)
-        ->and(Artisan::output())->toContain('All 1 images are covered by the baseline.');
+        ->and(Artisan::output())->toContain('The 1 image is covered by the baseline.');
 
     Http::assertNothingSent();
 });
@@ -412,7 +412,7 @@ test('the cwd baseline governs a subdirectory scan', function () {
 
     expect($exitCode)->toBe(0)
         ->and($output)->toContain('other.png')
-        ->and($output)->toContain('1 file(s) skipped by baseline.');
+        ->and($output)->toContain('1 file skipped by baseline.');
 
     Http::assertSentCount(1);
 });
