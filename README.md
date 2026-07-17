@@ -265,7 +265,7 @@ The transform commands keep the baseline current automatically: `convert` and `o
 
 The baseline only applies to directory scans. Naming a file explicitly (`glimpse analyze photo.png`) always analyzes it. Commit the file so CI and your teammates share the same starting point.
 
-Baseline writes are not locked: when several glimpse commands run in parallel against the same project, the last writer wins and can drop the others' entries. Run batch transforms sequentially when they should all land in the baseline, or finish with a single `analyze <dir> --update-baseline` to rebuild it.
+Baseline writes are safe to run in parallel: each save takes an exclusive lock on the file and merges its changes into whatever is there at that moment, so concurrent glimpse commands in the same project do not drop each other's entries.
 
 ### Info
 

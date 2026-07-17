@@ -12,10 +12,31 @@ use stdClass;
  * path plus size plus xxh128 content hash; a file whose content changed
  * re-enters the scan. The hash is for change detection, not security, so
  * a fast non-cryptographic digest is the right tool.
+ *
+ * Concurrency: reads take a shared flock and saves take an exclusive one.
+ * A save replays this instance's mutations onto whatever is in the file at
+ * that moment instead of writing back its loaded snapshot, so parallel
+ * glimpse runs merge their entries rather than clobbering each other.
  */
 final class BaselineFile
 {
     public const FILENAME = '.glimpse-baseline.json';
+
+    /**
+     * Entries put since load, replayed onto the file's current contents
+     * at save time.
+     *
+     * @var array<string, array{size: int, xxh128: string}>
+     */
+    private array $puts = [];
+
+    /**
+     * Keys forgotten since load, removed from the file's current contents
+     * at save time.
+     *
+     * @var array<string, true>
+     */
+    private array $forgets = [];
 
     /**
      * @param  array<string, array{size: int, xxh128: string}>  $files
@@ -36,18 +57,30 @@ final class BaselineFile
             return new self([]);
         }
 
-        $content = @file_get_contents($path);
+        $handle = @fopen($path, 'r');
 
-        if ($content === false) {
+        if ($handle === false) {
             throw new ApiException("Could not read {$path}.");
         }
 
-        $content = trim($content);
-
-        if ($content === '') {
-            return new self([]);
+        try {
+            flock($handle, LOCK_SH);
+            $content = trim((string) stream_get_contents($handle));
+        } finally {
+            flock($handle, LOCK_UN);
+            fclose($handle);
         }
 
+        return new self($content === '' ? [] : self::parse($content, $path));
+    }
+
+    /**
+     * Decode and validate baseline JSON into the entry map.
+     *
+     * @return array<string, array{size: int, xxh128: string}>
+     */
+    private static function parse(string $content, string $path): array
+    {
         $decoded = json_decode($content, true);
 
         if (! is_array($decoded) || ! is_array($decoded['files'] ?? null)) {
@@ -64,7 +97,7 @@ final class BaselineFile
             $files[$relative] = ['size' => $entry['size'], 'xxh128' => $entry['xxh128']];
         }
 
-        return new self($files);
+        return $files;
     }
 
     /**
@@ -167,15 +200,20 @@ final class BaselineFile
     public function put(string $relative, int $size, string $hash): void
     {
         $this->files[$relative] = ['size' => $size, 'xxh128' => $hash];
+        $this->puts[$relative] = $this->files[$relative];
+        unset($this->forgets[$relative]);
     }
 
     public function forget(string $relative): void
     {
-        unset($this->files[$relative]);
+        unset($this->files[$relative], $this->puts[$relative]);
+        $this->forgets[$relative] = true;
     }
 
     /**
-     * Drop entries whose file no longer exists under the directory.
+     * Drop entries whose file no longer exists under the directory. Goes
+     * through forget() so the removals also land in the file at save
+     * time, not just in this instance's snapshot.
      */
     public function prune(string $directory): void
     {
@@ -183,7 +221,7 @@ final class BaselineFile
 
         foreach (array_keys($this->files) as $relative) {
             if (! is_file($root.'/'.$relative)) {
-                unset($this->files[$relative]);
+                $this->forget($relative);
             }
         }
     }
@@ -194,24 +232,63 @@ final class BaselineFile
     }
 
     /**
-     * Write the baseline out, failing loudly instead of quietly losing
-     * entries: an unencodable filename or a failed write must never
-     * replace a healthy committed baseline with garbage.
+     * Write the baseline out under an exclusive lock, replaying this
+     * instance's puts and forgets onto the file's current contents so a
+     * parallel run's entries survive. Fails loudly instead of quietly
+     * losing entries: an unencodable filename (caught before the file is
+     * opened, so a failed save never creates or truncates one), a
+     * malformed file, or a failed write must never replace a healthy
+     * committed baseline with garbage.
      */
     public function save(string $directory): void
     {
-        ksort($this->files);
-
         $path = rtrim($directory, '/').'/'.self::FILENAME;
 
-        $json = json_encode(['files' => $this->files === [] ? new stdClass : $this->files], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-
-        if ($json === false) {
+        if (json_encode($this->files) === false) {
             throw new ApiException("Could not encode {$path}: ".json_last_error_msg().'. Is a filename not valid UTF-8?');
         }
 
-        if (@file_put_contents($path, $json.PHP_EOL) === false) {
+        $handle = @fopen($path, 'c+');
+
+        if ($handle === false) {
             throw new ApiException("Could not write {$path}.");
+        }
+
+        try {
+            flock($handle, LOCK_EX);
+
+            $current = trim((string) stream_get_contents($handle));
+            $merged = $current === '' ? [] : self::parse($current, $path);
+
+            foreach (array_keys($this->forgets) as $relative) {
+                unset($merged[$relative]);
+            }
+
+            foreach ($this->puts as $relative => $entry) {
+                $merged[$relative] = $entry;
+            }
+
+            ksort($merged);
+
+            $json = json_encode(['files' => $merged === [] ? new stdClass : $merged], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+
+            if ($json === false) {
+                throw new ApiException("Could not encode {$path}: ".json_last_error_msg().'. Is a filename not valid UTF-8?');
+            }
+
+            rewind($handle);
+            $written = fwrite($handle, $json.PHP_EOL);
+
+            if ($written === false || ! ftruncate($handle, $written)) {
+                throw new ApiException("Could not write {$path}.");
+            }
+
+            $this->files = $merged;
+            $this->puts = [];
+            $this->forgets = [];
+        } finally {
+            flock($handle, LOCK_UN);
+            fclose($handle);
         }
     }
 }

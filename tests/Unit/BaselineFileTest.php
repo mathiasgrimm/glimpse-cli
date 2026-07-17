@@ -171,6 +171,78 @@ test('save fails loudly when the directory is not writable', function () {
     }
 });
 
+test('save merges entries added by a parallel writer instead of clobbering them', function () {
+    $a = createImage('a.png');
+    writeBaseline(['a.png' => baselineEntry($a)]);
+
+    $mine = BaselineFile::load(workspace());
+
+    $b = createImage('b.png');
+    writeBaseline(['a.png' => baselineEntry($a), 'b.png' => baselineEntry($b)]);
+
+    $mine->record('c.png', createImage('c.png'));
+    $mine->save(workspace());
+
+    expect(array_keys(readBaseline()['files']))->toBe(['a.png', 'b.png', 'c.png'])
+        ->and($mine->count())->toBe(3);
+});
+
+test('save applies a forget even when a parallel writer re-wrote the entry', function () {
+    $a = createImage('a.png');
+    $stale = createImage('stale.png');
+    writeBaseline(['a.png' => baselineEntry($a), 'stale.png' => baselineEntry($stale)]);
+
+    $mine = BaselineFile::load(workspace());
+
+    writeBaseline(['a.png' => baselineEntry($a), 'stale.png' => baselineEntry($stale)]);
+
+    $mine->forget('stale.png');
+    $mine->save(workspace());
+
+    expect(array_keys(readBaseline()['files']))->toBe(['a.png']);
+});
+
+test('a prune lands in the file as forgets, surviving a parallel rewrite', function () {
+    $kept = createImage('kept.png');
+    $gone = createImage('gone.png');
+    writeBaseline(['gone.png' => baselineEntry($gone), 'kept.png' => baselineEntry($kept)]);
+
+    $mine = BaselineFile::load(workspace());
+
+    unlink($gone);
+    $mine->prune(workspace());
+
+    writeBaseline(['gone.png' => ['size' => 1, 'xxh128' => 'stale'], 'kept.png' => baselineEntry($kept)]);
+
+    $mine->save(workspace());
+
+    expect(array_keys(readBaseline()['files']))->toBe(['kept.png']);
+});
+
+test('putting a key again cancels a pending forget for it', function () {
+    $path = createImage('photo.png');
+    writeBaseline(['photo.png' => baselineEntry($path)]);
+
+    $mine = BaselineFile::load(workspace());
+    $mine->forget('photo.png');
+    $mine->record('photo.png', $path);
+    $mine->save(workspace());
+
+    expect(array_keys(readBaseline()['files']))->toBe(['photo.png']);
+});
+
+test('save fails loudly when the file turned malformed since load', function () {
+    $path = createImage('photo.png');
+    writeBaseline(['photo.png' => baselineEntry($path)]);
+
+    $mine = BaselineFile::load(workspace());
+
+    file_put_contents(workspace().'/'.BaselineFile::FILENAME, '{nope');
+
+    expect(fn () => $mine->save(workspace()))->toThrow(ApiException::class, 'Malformed')
+        ->and(file_get_contents(workspace().'/'.BaselineFile::FILENAME))->toBe('{nope');
+});
+
 test('record skips a file that vanished instead of crashing', function () {
     $path = createImage('photo.png');
     unlink($path);
