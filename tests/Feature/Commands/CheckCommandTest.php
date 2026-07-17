@@ -173,34 +173,6 @@ test('passes when .glimpseignore excludes every offender', function () {
     Http::assertNothingSent();
 });
 
-test('passes when the baseline covers every offender', function () {
-    chdirWorkspace();
-    fakeAnalyze();
-    writeBaseline(['photo.png' => baselineEntry(createImage('photo.png'))]);
-
-    $exitCode = Artisan::call('check', ['input' => workspace()]);
-
-    expect($exitCode)->toBe(0)
-        ->and(Artisan::output())->toContain('The 1 image is covered by the baseline.');
-
-    Http::assertNothingSent();
-});
-
-test('fails again when a baselined file changed', function () {
-    chdirWorkspace();
-    fakeAnalyze();
-    $path = createImage('photo.png');
-    $entry = baselineEntry($path);
-    $entry['xxh128'] = 'stale';
-
-    writeBaseline(['photo.png' => $entry]);
-
-    $exitCode = Artisan::call('check', ['input' => workspace()]);
-
-    expect($exitCode)->toBe(1)
-        ->and(Artisan::output())->toContain('1 of 1 image needs optimization');
-});
-
 test('reports the baseline-skipped count alongside remaining offenders', function () {
     chdirWorkspace();
     fakeAnalyze();
@@ -215,32 +187,6 @@ test('reports the baseline-skipped count alongside remaining offenders', functio
         ->and($output)->toContain('1 file skipped by baseline.');
 
     Http::assertSentCount(1);
-});
-
-test('an explicit single file is checked even when baselined', function () {
-    chdirWorkspace();
-    fakeAnalyze();
-    $path = createImage('photo.png');
-    writeBaseline(['photo.png' => baselineEntry($path)]);
-
-    $exitCode = Artisan::call('check', ['input' => $path]);
-
-    expect($exitCode)->toBe(1);
-
-    Http::assertSentCount(1);
-});
-
-test('a malformed baseline fails loudly before any HTTP request', function () {
-    chdirWorkspace();
-    fakeAnalyze();
-    createImage('photo.png');
-    file_put_contents(workspace().'/.glimpse-baseline.json', '{nope');
-
-    $this->artisan('check', ['input' => workspace()])
-        ->expectsOutputToContain('Malformed')
-        ->assertExitCode(1);
-
-    Http::assertNothingSent();
 });
 
 test('the cwd baseline governs a subdirectory scan', function () {

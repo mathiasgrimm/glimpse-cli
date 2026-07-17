@@ -73,13 +73,23 @@ function chdirWorkspace(?string $directory = null): void
 }
 
 /**
+ * The path of the .glimpse-baseline.json in the directory (the test
+ * workspace by default).
+ */
+function baselinePath(?string $directory = null): string
+{
+    return ($directory ?? workspace()).'/'.BaselineFile::FILENAME;
+}
+
+/**
  * Write a .glimpse-baseline.json into the directory (the test workspace by
- * default). Entries map relative paths to size/xxh128/via records; build
- * current-content entries with baselineEntry().
+ * default), empty unless entries are given. Entries map relative paths to
+ * size/xxh128/via records; build current-content entries with
+ * baselineEntry().
  *
  * @param  array<string, array{size: int, xxh128: string, via: string}>  $files
  */
-function writeBaseline(array $files, ?string $directory = null): void
+function writeBaseline(array $files = [], ?string $directory = null): void
 {
     $directory ??= workspace();
 
@@ -88,12 +98,27 @@ function writeBaseline(array $files, ?string $directory = null): void
     }
 
     file_put_contents(
-        $directory.'/'.BaselineFile::FILENAME,
+        baselinePath($directory),
         json_encode([
             '_readme' => BaselineFile::README,
             'files' => $files === [] ? new stdClass : $files,
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES).PHP_EOL,
     );
+}
+
+/**
+ * Plant an unparseable .glimpse-baseline.json in the directory (the test
+ * workspace by default).
+ */
+function writeMalformedBaseline(?string $directory = null): void
+{
+    $directory ??= workspace();
+
+    if (! is_dir($directory)) {
+        mkdir($directory, 0755, true);
+    }
+
+    file_put_contents(baselinePath($directory), '{nope');
 }
 
 /**
@@ -108,16 +133,14 @@ function baselineEntry(string $path, string $via = 'analyze'): array
 }
 
 /**
- * Decode the .glimpse-baseline.json in the directory (the test workspace by
- * default).
+ * The files map of the .glimpse-baseline.json in the directory (the test
+ * workspace by default).
  *
- * @return array{files: array<string, array{size: int, xxh128: string, via: string}>}
+ * @return array<string, array{size: int, xxh128: string, via: string}>
  */
-function readBaseline(?string $directory = null): array
+function baselineFiles(?string $directory = null): array
 {
-    $path = ($directory ?? workspace()).'/'.BaselineFile::FILENAME;
-
-    return json_decode((string) file_get_contents($path), true);
+    return json_decode((string) file_get_contents(baselinePath($directory)), true)['files'];
 }
 
 /**
@@ -150,4 +173,21 @@ function fakeTransformResponse(string $format = 'jpg', string $mimeType = 'image
         'width' => 1280,
         'height' => 720,
     ]];
+}
+
+/**
+ * Fake a transform endpoint (convert, optimize, resize, thumbnail) with a
+ * canned successful response reporting the given output format.
+ */
+function fakeTransform(string $endpoint, string $format = 'jpg'): void
+{
+    $mimeType = [
+        'jpg' => 'image/jpeg',
+        'png' => 'image/png',
+        'webp' => 'image/webp',
+        'gif' => 'image/gif',
+        'avif' => 'image/avif',
+    ][$format];
+
+    Http::fake(["*/v1/{$endpoint}" => Http::response(fakeTransformResponse($format, $mimeType))]);
 }

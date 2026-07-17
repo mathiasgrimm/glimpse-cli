@@ -9,7 +9,7 @@ test('a missing or empty file is an empty baseline', function () {
     expect(BaselineFile::load(workspace())->skips('photo.png', $path))->toBeFalse()
         ->and(BaselineFile::load(workspace())->count())->toBe(0);
 
-    file_put_contents(workspace().'/'.BaselineFile::FILENAME, '');
+    file_put_contents(baselinePath(), '');
 
     expect(BaselineFile::load(workspace())->skips('photo.png', $path))->toBeFalse();
 });
@@ -101,7 +101,7 @@ test('save writes pretty json with sorted keys and a trailing newline', function
         ],
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 
-    expect(file_get_contents(workspace().'/'.BaselineFile::FILENAME))->toBe($expected.PHP_EOL);
+    expect(file_get_contents(baselinePath()))->toBe($expected.PHP_EOL);
 });
 
 test('an empty baseline saves as an empty files object under the readme header', function () {
@@ -114,7 +114,7 @@ test('an empty baseline saves as an empty files object under the readme header',
         'files' => new stdClass,
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 
-    expect(file_get_contents(workspace().'/'.BaselineFile::FILENAME))->toBe($expected.PHP_EOL);
+    expect(file_get_contents(baselinePath()))->toBe($expected.PHP_EOL);
 });
 
 test('a saved baseline loads back with the same matching', function () {
@@ -129,7 +129,7 @@ test('a saved baseline loads back with the same matching', function () {
 
 test('load fails loudly on an unreadable baseline', function () {
     mkdir(workspace(), 0755, true);
-    $path = workspace().'/'.BaselineFile::FILENAME;
+    $path = baselinePath();
     file_put_contents($path, '{"files": {}}');
     chmod($path, 0000);
 
@@ -148,7 +148,7 @@ test('save fails loudly instead of writing garbage for a non-utf8 filename', fun
     $baseline->put("caf\xE9.png", 1, 'abc', 'analyze');
 
     expect(fn () => $baseline->save(workspace()))->toThrow(ApiException::class, 'Could not encode')
-        ->and(file_exists(workspace().'/'.BaselineFile::FILENAME))->toBeFalse();
+        ->and(file_exists(baselinePath()))->toBeFalse();
 });
 
 test('save fails loudly when the directory is not writable', function () {
@@ -170,7 +170,7 @@ test('loading for update fails fast when another process holds the lock', functi
     $path = createImage('photo.png');
     writeBaseline(['photo.png' => baselineEntry($path)]);
 
-    $other = fopen(workspace().'/'.BaselineFile::FILENAME, 'r+');
+    $other = fopen(baselinePath(), 'r+');
     flock($other, LOCK_EX);
 
     try {
@@ -183,10 +183,10 @@ test('loading for update fails fast when another process holds the lock', functi
 });
 
 test('loading for update takes the lock first and holds it until save releases it', function () {
-    writeBaseline([]);
+    writeBaseline();
 
     $baseline = BaselineFile::load(workspace(), forUpdate: true);
-    $other = fopen(workspace().'/'.BaselineFile::FILENAME, 'r+');
+    $other = fopen(baselinePath(), 'r+');
 
     expect(flock($other, LOCK_EX | LOCK_NB))->toBeFalse();
 
@@ -194,7 +194,7 @@ test('loading for update takes the lock first and holds it until save releases i
     $baseline->save(workspace());
 
     expect(flock($other, LOCK_EX | LOCK_NB))->toBeTrue()
-        ->and(array_keys(readBaseline()['files']))->toBe(['photo.png']);
+        ->and(array_keys(baselineFiles()))->toBe(['photo.png']);
 
     flock($other, LOCK_UN);
     fclose($other);
@@ -206,7 +206,7 @@ test('a plain load does not lock the file', function () {
 
     BaselineFile::load(workspace());
 
-    $other = fopen(workspace().'/'.BaselineFile::FILENAME, 'r+');
+    $other = fopen(baselinePath(), 'r+');
 
     expect(flock($other, LOCK_EX | LOCK_NB))->toBeTrue();
 
@@ -215,14 +215,14 @@ test('a plain load does not lock the file', function () {
 });
 
 test('a failed save releases the lock taken at load', function () {
-    writeBaseline([]);
+    writeBaseline();
 
     $baseline = BaselineFile::load(workspace(), forUpdate: true);
     $baseline->put("caf\xE9.png", 1, 'abc', 'analyze');
 
     expect(fn () => $baseline->save(workspace()))->toThrow(ApiException::class, 'Could not encode');
 
-    $other = fopen(workspace().'/'.BaselineFile::FILENAME, 'r+');
+    $other = fopen(baselinePath(), 'r+');
 
     expect(flock($other, LOCK_EX | LOCK_NB))->toBeTrue();
 
@@ -236,7 +236,7 @@ test('save fails fast when another process created the baseline since load', fun
     $baseline = BaselineFile::load(workspace());
     $baseline->put('a.png', 1, 'abc', 'analyze');
 
-    writeBaseline([]);
+    writeBaseline();
 
     expect(fn () => $baseline->save(workspace()))
         ->toThrow(ApiException::class, 'created by another glimpse process');
@@ -256,18 +256,18 @@ test('concurrent first-time creation fails loudly instead of losing entries', fu
 
     expect(fn () => $second->save(workspace()))
         ->toThrow(ApiException::class, 'created by another glimpse process')
-        ->and(array_keys(readBaseline()['files']))->toBe(['a.png']);
+        ->and(array_keys(baselineFiles()))->toBe(['a.png']);
 });
 
 test('save leaves no temporary or stray files behind', function () {
-    writeBaseline([]);
+    writeBaseline();
 
     $baseline = BaselineFile::load(workspace(), forUpdate: true);
     $baseline->record('photo.png', createImage('photo.png'), 'analyze');
     $baseline->save(workspace());
 
-    expect(glob(workspace().'/'.BaselineFile::FILENAME.'.*'))->toBe([])
-        ->and(array_keys(readBaseline()['files']))->toBe(['photo.png']);
+    expect(glob(baselinePath().'.*'))->toBe([])
+        ->and(array_keys(baselineFiles()))->toBe(['photo.png']);
 });
 
 test('record skips a file that vanished instead of crashing', function () {
@@ -296,7 +296,7 @@ test('put stores a precomputed entry and forget removes one', function () {
 
 test('load fails loudly on a malformed baseline', function (string $content) {
     mkdir(workspace(), 0755, true);
-    file_put_contents(workspace().'/'.BaselineFile::FILENAME, $content);
+    file_put_contents(baselinePath(), $content);
 
     BaselineFile::load(workspace());
 })->throws(ApiException::class, 'Malformed')->with([

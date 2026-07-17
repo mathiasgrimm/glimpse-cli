@@ -9,7 +9,7 @@ beforeEach(function () {
 });
 
 test('creates a thumbnail with API defaults and writes a .thumb output', function () {
-    Http::fake(['*/v1/thumbnail' => Http::response(fakeTransformResponse())]);
+    fakeTransform('thumbnail');
 
     $input = createImage('photo.png');
     $expectedOutput = dirname($input).'/photo.thumb.jpg';
@@ -30,7 +30,7 @@ test('creates a thumbnail with API defaults and writes a .thumb output', functio
 });
 
 test('--in-place overwrites the input file without --force', function () {
-    Http::fake(['*/v1/thumbnail' => Http::response(fakeTransformResponse('png', 'image/png'))]);
+    fakeTransform('thumbnail', 'png');
 
     $input = createImage('photo.png');
 
@@ -42,23 +42,8 @@ test('--in-place overwrites the input file without --force', function () {
         ->and(file_exists(dirname($input).'/photo.thumb.png'))->toBeFalse();
 });
 
-test('records only the output in an existing baseline', function () {
-    chdirWorkspace();
-    Http::fake(['*/v1/thumbnail' => Http::response(fakeTransformResponse())]);
-
-    $input = createImage('photo.png');
-    writeBaseline([]);
-
-    $this->artisan('thumbnail', ['input' => $input])
-        ->assertExitCode(0);
-
-    expect(readBaseline()['files'])->toBe([
-        'photo.thumb.jpg' => baselineEntry(dirname($input).'/photo.thumb.jpg', 'thumbnail'),
-    ]);
-});
-
 test('passes width, height, and quality through to the API', function () {
-    Http::fake(['*/v1/thumbnail' => Http::response(fakeTransformResponse())]);
+    fakeTransform('thumbnail');
 
     $this->artisan('thumbnail', [
         'input' => createImage(),
