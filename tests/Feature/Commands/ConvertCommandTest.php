@@ -10,7 +10,7 @@ beforeEach(function () {
 });
 
 test('converts and writes the default output path next to the input', function () {
-    Http::fake(['*/v1/convert' => Http::response(fakeTransformResponse('webp', 'image/webp'))]);
+    fakeTransform('convert', 'webp');
 
     $input = createImage('photo.png');
     $expectedOutput = dirname($input).'/photo.webp';
@@ -27,7 +27,7 @@ test('converts and writes the default output path next to the input', function (
 });
 
 test('infers the format from the output path extension', function () {
-    Http::fake(['*/v1/convert' => Http::response(fakeTransformResponse('webp', 'image/webp'))]);
+    fakeTransform('convert', 'webp');
 
     $input = createImage('photo.png');
     $output = dirname($input).'/converted.webp';
@@ -41,7 +41,7 @@ test('infers the format from the output path extension', function () {
 });
 
 test('--optimize sends optimize without quality', function () {
-    Http::fake(['*/v1/convert' => Http::response(fakeTransformResponse('webp', 'image/webp'))]);
+    fakeTransform('convert', 'webp');
 
     $this->artisan('convert', ['input' => createImage('photo.png'), '--format' => 'webp', '--optimize' => true])
         ->assertExitCode(0);
@@ -51,7 +51,7 @@ test('--optimize sends optimize without quality', function () {
 });
 
 test('--optimize with --quality sends both', function () {
-    Http::fake(['*/v1/convert' => Http::response(fakeTransformResponse('webp', 'image/webp'))]);
+    fakeTransform('convert', 'webp');
 
     $this->artisan('convert', ['input' => createImage('photo.png'), '--format' => 'webp', '--optimize' => true, '--quality' => '70'])
         ->assertExitCode(0);
@@ -61,7 +61,7 @@ test('--optimize with --quality sends both', function () {
 });
 
 test('omits optimize and quality from the payload when the flags are not given', function () {
-    Http::fake(['*/v1/convert' => Http::response(fakeTransformResponse('webp', 'image/webp'))]);
+    fakeTransform('convert', 'webp');
 
     $this->artisan('convert', ['input' => createImage('photo.png'), '--format' => 'webp'])
         ->assertExitCode(0);
@@ -101,7 +101,7 @@ test('rejects an unsupported format before any HTTP request', function () {
 });
 
 test('refuses to overwrite the derived output file without --force', function () {
-    Http::fake(['*/v1/convert' => Http::response(fakeTransformResponse('webp', 'image/webp'))]);
+    fakeTransform('convert', 'webp');
 
     $input = createImage('photo.png');
     $existing = dirname($input).'/photo.webp';
@@ -129,7 +129,7 @@ test('an existing explicit output fails fast before any HTTP request', function 
 });
 
 test('overwrites the output file with --force', function () {
-    Http::fake(['*/v1/convert' => Http::response(fakeTransformResponse('webp', 'image/webp'))]);
+    fakeTransform('convert', 'webp');
 
     $input = createImage('photo.png');
     $existing = dirname($input).'/photo.webp';
@@ -142,7 +142,7 @@ test('overwrites the output file with --force', function () {
 });
 
 test('--in-place replaces the input with the converted file', function () {
-    Http::fake(['*/v1/convert' => Http::response(fakeTransformResponse('webp', 'image/webp'))]);
+    fakeTransform('convert', 'webp');
 
     $input = createImage('photo.png');
     $expectedOutput = dirname($input).'/photo.webp';
@@ -156,7 +156,7 @@ test('--in-place replaces the input with the converted file', function () {
 });
 
 test('--in-place overwrites the input without --force when the format is unchanged', function () {
-    Http::fake(['*/v1/convert' => Http::response(fakeTransformResponse('png', 'image/png'))]);
+    fakeTransform('convert', 'png');
 
     $input = createImage('photo.png');
 
@@ -185,7 +185,7 @@ test('--in-place fails fast when the converted target already exists without --f
 });
 
 test('--in-place with --force overwrites the converted target and removes the input', function () {
-    Http::fake(['*/v1/convert' => Http::response(fakeTransformResponse('webp', 'image/webp'))]);
+    fakeTransform('convert', 'webp');
 
     $input = createImage('photo.png');
     $existing = dirname($input).'/photo.webp';
@@ -221,7 +221,7 @@ test('--in-place cannot be used with stdin input', function () {
 });
 
 test('prints result metadata as JSON with --json', function () {
-    Http::fake(['*/v1/convert' => Http::response(fakeTransformResponse('webp', 'image/webp'))]);
+    fakeTransform('convert', 'webp');
 
     $input = createImage('photo.png');
     $expectedOutput = dirname($input).'/photo.webp';
@@ -257,6 +257,161 @@ test('errors on a missing input file', function () {
         ->assertExitCode(1);
 
     Http::assertNothingSent();
+});
+
+test('--optimize records the entries as via optimize', function () {
+    chdirWorkspace();
+    fakeTransform('convert', 'webp');
+
+    $input = createImage('photo.png');
+    writeBaseline();
+
+    $this->artisan('convert', ['input' => $input, '--format' => 'webp', '--optimize' => true])
+        ->assertExitCode(0);
+
+    expect(baselineFiles())->toBe([
+        'photo.png' => baselineEntry($input, 'optimize'),
+        'photo.webp' => baselineEntry(dirname($input).'/photo.webp', 'optimize'),
+    ]);
+});
+
+test('records paths relative to the current working directory', function () {
+    chdirWorkspace();
+    fakeTransform('convert', 'webp');
+
+    $input = createImage('nested/photo.png');
+    writeBaseline();
+
+    $this->artisan('convert', ['input' => $input, '--format' => 'webp'])
+        ->assertExitCode(0);
+
+    expect(array_keys(baselineFiles()))->toBe(['nested/photo.png', 'nested/photo.webp']);
+});
+
+test('a baseline is not picked up from outside the current working directory', function () {
+    fakeTransform('convert', 'webp');
+
+    $input = createImage('nested/photo.png');
+    writeBaseline();
+    chdirWorkspace(workspace().'/nested');
+
+    $this->artisan('convert', ['input' => $input, '--format' => 'webp'])
+        ->assertExitCode(0);
+
+    expect(baselineFiles())->toBe([])
+        ->and(file_exists(baselinePath(workspace().'/nested')))->toBeFalse();
+});
+
+test('--in-place with an extension change records only the output', function () {
+    chdirWorkspace();
+    fakeTransform('convert', 'webp');
+
+    $input = createImage('photo.png');
+    writeBaseline();
+
+    $this->artisan('convert', ['input' => $input, '--format' => 'webp', '--in-place' => true])
+        ->assertExitCode(0);
+
+    expect(baselineFiles())->toBe([
+        'photo.webp' => baselineEntry(dirname($input).'/photo.webp', 'convert'),
+    ]);
+});
+
+test('an output outside the current working directory records nothing', function () {
+    chdirWorkspace();
+    fakeTransform('convert', 'webp');
+
+    $input = createImage('photo.png');
+    writeBaseline();
+
+    $this->artisan('convert', ['input' => $input, '--output' => test()->configHome.'/outside.webp'])
+        ->assertExitCode(0);
+
+    expect(baselineFiles())->toBe([]);
+});
+
+test('--in-place with an extension change drops the stale source entry', function () {
+    chdirWorkspace();
+    fakeTransform('convert', 'webp');
+
+    $input = createImage('photo.png');
+    writeBaseline(['photo.png' => baselineEntry($input)]);
+
+    $this->artisan('convert', ['input' => $input, '--format' => 'webp', '--in-place' => true])
+        ->assertExitCode(0);
+
+    expect(baselineFiles())->toBe([
+        'photo.webp' => baselineEntry(dirname($input).'/photo.webp', 'convert'),
+    ]);
+});
+
+test('a source excluded by .glimpseignore is not recorded in the baseline', function () {
+    chdirWorkspace();
+    fakeTransform('convert', 'webp');
+
+    $input = createImage('photo.png');
+    writeBaseline();
+    file_put_contents(workspace().'/.glimpseignore', "photo.png\n");
+
+    $this->artisan('convert', ['input' => $input, '--format' => 'webp'])
+        ->assertExitCode(0);
+
+    expect(baselineFiles())->toBe([
+        'photo.webp' => baselineEntry(dirname($input).'/photo.webp', 'convert'),
+    ]);
+});
+
+test('an output excluded by .glimpseignore is not recorded in the baseline', function () {
+    chdirWorkspace();
+    fakeTransform('convert', 'webp');
+
+    $input = createImage('photo.png');
+    writeBaseline();
+    file_put_contents(workspace().'/.glimpseignore', "*.webp\n");
+
+    $this->artisan('convert', ['input' => $input, '--format' => 'webp'])
+        ->assertExitCode(0);
+
+    expect(baselineFiles())->toBe([
+        'photo.png' => baselineEntry($input, 'convert'),
+    ]);
+});
+
+test('a baseline locked by another process does not fail a conversion that succeeded', function () {
+    chdirWorkspace();
+    fakeTransform('convert', 'webp');
+
+    $input = createImage('photo.png');
+    writeBaseline();
+
+    $other = fopen(baselinePath(), 'r+');
+    flock($other, LOCK_EX);
+
+    try {
+        $this->artisan('convert', ['input' => $input, '--format' => 'webp'])
+            ->expectsOutputToContain('Wrote')
+            ->assertExitCode(0);
+    } finally {
+        flock($other, LOCK_UN);
+        fclose($other);
+    }
+
+    expect(baselineFiles())->toBe([]);
+});
+
+test('a malformed baseline does not fail a conversion that succeeded', function () {
+    chdirWorkspace();
+    fakeTransform('convert', 'webp');
+
+    $input = createImage('photo.png');
+    writeMalformedBaseline();
+
+    $this->artisan('convert', ['input' => $input, '--format' => 'webp'])
+        ->expectsOutputToContain('Wrote')
+        ->assertExitCode(0);
+
+    expect(file_get_contents(dirname($input).'/photo.webp'))->toBe(Images::jpg())
+        ->and(file_get_contents(baselinePath()))->toBe('{nope');
 });
 
 test('rejects inputs over the 15 MiB limit before any HTTP request', function () {

@@ -2,15 +2,28 @@
 
 namespace App\Commands\Concerns;
 
+use App\Support\BaselineFile;
+use App\Support\Paths;
 use GlimpseImg\ApiException;
 use GlimpseImg\AuthException;
 use GlimpseImg\Client;
 use GlimpseImg\FrameCounter;
 use GlimpseImg\ImageFormat;
 use GlimpseImg\SampleProbe;
+use Illuminate\Support\Str;
 
 trait AnalyzesImages
 {
+    /**
+     * Size and content hash of each file this run analyzed, captured from
+     * the exact bytes that were measured, so --update-baseline records
+     * what was analyzed without re-reading (or trusting) the disk after
+     * the network-bound batch finished.
+     *
+     * @var array<string, array{size: int, xxh128: string}>
+     */
+    private array $analyzedHashes = [];
+
     /**
      * Analyze a single file inside a batch. Failures are recorded, not
      * thrown, so one bad file does not abort the scan. Auth failures do
@@ -20,10 +33,14 @@ trait AnalyzesImages
      */
     private function analyzeFile(Client $client, SampleProbe $probe, string $dir, string $path, ?ImageFormat $target, ?int $quality): array
     {
-        $file = ltrim(substr($path, strlen(rtrim($dir, '/'))), '/');
+        $file = Paths::relativePath($dir, $path);
 
         try {
             $bytes = $this->readImage($path, limitBytes: false);
+
+            if ($this->hasOption('update-baseline') && (bool) $this->option('update-baseline')) {
+                $this->analyzedHashes[$file] = ['size' => strlen($bytes), 'xxh128' => hash('xxh128', $bytes)];
+            }
 
             $format = ImageFormat::tryFromBinary($bytes)
                 ?? throw new ApiException('Unrecognized image format.');
@@ -42,6 +59,48 @@ trait AnalyzesImages
         } catch (ApiException $exception) {
             return ['file' => $file, 'error' => $exception->getMessage()];
         }
+    }
+
+    /**
+     * Split the found files into the ones still to analyze and the count
+     * covered by the baseline. A scan directory outside the root is left
+     * untouched: no file gets skipped.
+     *
+     * @param  list<string>  $files
+     * @return array{list<string>, int}
+     */
+    private function partitionByBaseline(BaselineFile $baseline, string $root, string $dir, array $files): array
+    {
+        $prefix = Paths::keyPrefix($root, $dir);
+
+        if ($prefix === null) {
+            return [$files, 0];
+        }
+
+        $remaining = array_values(array_filter(
+            $files,
+            fn (string $path) => ! $baseline->skips($prefix.Paths::relativePath($dir, $path), $path),
+        ));
+
+        return [$remaining, count($files) - count($remaining)];
+    }
+
+    /**
+     * The summary line for a scan the baseline fully absorbed.
+     */
+    private function allCoveredMessage(int $count): string
+    {
+        return $count === 1
+            ? 'The 1 image is covered by the baseline.'
+            : "All {$count} images are covered by the baseline.";
+    }
+
+    /**
+     * The gray note counting files the baseline skipped.
+     */
+    private function baselineSkippedLine(int $count): string
+    {
+        return sprintf('<fg=gray>%d %s skipped by baseline.</>', $count, Str::plural('file', $count));
     }
 
     /**

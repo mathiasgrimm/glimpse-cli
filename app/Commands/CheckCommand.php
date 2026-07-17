@@ -3,10 +3,13 @@
 namespace App\Commands;
 
 use App\Commands\Concerns\AnalyzesImages;
+use App\Support\BaselineFile;
 use App\Support\ImageFinder;
+use App\Support\Paths;
 use GlimpseImg\ApiException;
 use GlimpseImg\Client;
 use GlimpseImg\SampleProbe;
+use Illuminate\Support\Str;
 
 class CheckCommand extends GlimpseCommand
 {
@@ -27,10 +30,19 @@ class CheckCommand extends GlimpseCommand
 
             [$dir, $files] = $this->collect($input);
 
+            $skipped = 0;
+
+            if (is_dir($input)) {
+                $root = Paths::root();
+                [$files, $skipped] = $this->partitionByBaseline(BaselineFile::load($root), $root, $input, $files);
+            }
+
             if ($files === []) {
                 $this->option('json')
-                    ? $this->emitJson([], [], 0, $threshold)
-                    : $this->info("No images found in {$input}.");
+                    ? $this->emitJson([], [], 0, $threshold, $skipped)
+                    : $this->info($skipped > 0
+                        ? $this->allCoveredMessage($skipped)
+                        : "No images found in {$input}.");
 
                 return self::SUCCESS;
             }
@@ -61,8 +73,8 @@ class CheckCommand extends GlimpseCommand
             )));
 
             $this->option('json')
-                ? $this->emitJson($offenders, $failed, count($rows), $threshold)
-                : $this->render($offenders, $failed, count($rows), $threshold);
+                ? $this->emitJson($offenders, $failed, count($rows), $threshold, $skipped)
+                : $this->render($offenders, $failed, count($rows), $threshold, $skipped);
 
             return $offenders === [] && $failed === [] ? self::SUCCESS : self::FAILURE;
         });
@@ -103,7 +115,7 @@ class CheckCommand extends GlimpseCommand
      * @param  list<array<string, mixed>>  $offenders
      * @param  list<array<string, mixed>>  $failed
      */
-    private function render(array $offenders, array $failed, int $total, float $threshold): void
+    private function render(array $offenders, array $failed, int $total, float $threshold, int $baselineSkipped): void
     {
         $percent = rtrim(rtrim(number_format($threshold, 1), '0'), '.');
 
@@ -117,22 +129,30 @@ class CheckCommand extends GlimpseCommand
             ], $offenders));
 
             $this->error(sprintf(
-                '%d of %d images need optimization (threshold: %s%%).',
+                '%d of %d %s %s optimization (threshold: %s%%).',
                 count($offenders),
                 $total,
+                Str::plural('image', $total),
+                count($offenders) === 1 ? 'needs' : 'need',
                 $percent,
             ));
         } else {
-            $this->info("All {$total} images are within the {$percent}% threshold.");
+            $this->info($total === 1
+                ? "The 1 image is within the {$percent}% threshold."
+                : "All {$total} images are within the {$percent}% threshold.");
         }
 
         if ($failed !== []) {
             $this->newLine();
-            $this->error(count($failed).' file(s) could not be checked:');
+            $this->error(sprintf('%d %s could not be checked:', count($failed), Str::plural('file', count($failed))));
 
             foreach ($failed as $row) {
                 $this->line("  <fg=red>{$row['file']}</>: {$row['error']}");
             }
+        }
+
+        if ($baselineSkipped > 0) {
+            $this->line($this->baselineSkippedLine($baselineSkipped));
         }
     }
 
@@ -140,7 +160,7 @@ class CheckCommand extends GlimpseCommand
      * @param  list<array<string, mixed>>  $offenders
      * @param  list<array<string, mixed>>  $failed
      */
-    private function emitJson(array $offenders, array $failed, int $total, float $threshold): void
+    private function emitJson(array $offenders, array $failed, int $total, float $threshold, int $baselineSkipped): void
     {
         $this->line((string) json_encode([
             'threshold' => $threshold,
@@ -148,6 +168,7 @@ class CheckCommand extends GlimpseCommand
             'needs_optimization' => count($offenders),
             'files' => $offenders,
             'failed' => $failed,
+            'baseline_skipped' => $baselineSkipped,
         ], JSON_UNESCAPED_SLASHES));
     }
 }

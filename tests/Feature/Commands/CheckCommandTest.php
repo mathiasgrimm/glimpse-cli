@@ -49,7 +49,7 @@ test('passes when every image is within the threshold', function () {
     $output = Artisan::output();
 
     expect($exitCode)->toBe(0)
-        ->and($output)->toContain('All 1 images are within the 10% threshold.')
+        ->and($output)->toContain('The 1 image is within the 10% threshold.')
         ->and($output)->not->toContain('photo.png');
 });
 
@@ -89,7 +89,7 @@ test('checks a single file by its basename', function () {
 
     expect($exitCode)->toBe(1)
         ->and($output)->toContain('photo.png')
-        ->and($output)->toContain('1 of 1 images need optimization');
+        ->and($output)->toContain('1 of 1 image needs optimization');
 });
 
 test('fails cleanly when the path does not exist', function () {
@@ -142,7 +142,7 @@ test('fails when a file cannot be checked', function () {
     $output = Artisan::output();
 
     expect($exitCode)->toBe(1)
-        ->and($output)->toContain('1 file(s) could not be checked:')
+        ->and($output)->toContain('1 file could not be checked:')
         ->and($output)->toContain('bad.png')
         ->and($output)->toContain('Unrecognized image format.');
 });
@@ -160,6 +160,7 @@ test('passes when the directory contains no images', function () {
 });
 
 test('passes when .glimpseignore excludes every offender', function () {
+    chdirWorkspace();
     fakeAnalyze();
     createImage('photo.png');
     file_put_contents(workspace().'/.glimpseignore', "*.png\n");
@@ -170,6 +171,79 @@ test('passes when .glimpseignore excludes every offender', function () {
         ->and(Artisan::output())->toContain('No images found in');
 
     Http::assertNothingSent();
+});
+
+test('reports the baseline-skipped count alongside remaining offenders', function () {
+    chdirWorkspace();
+    fakeAnalyze();
+    createImage('photo.png');
+    writeBaseline(['covered.png' => baselineEntry(createImage('covered.png'))]);
+
+    $exitCode = Artisan::call('check', ['input' => workspace()]);
+    $output = Artisan::output();
+
+    expect($exitCode)->toBe(1)
+        ->and($output)->toContain('1 of 1 image needs optimization')
+        ->and($output)->toContain('1 file skipped by baseline.');
+
+    Http::assertSentCount(1);
+});
+
+test('the cwd baseline governs a subdirectory scan', function () {
+    chdirWorkspace();
+    fakeAnalyze();
+    $covered = createImage('sub/photo.png');
+    writeBaseline(['sub/photo.png' => baselineEntry($covered)]);
+
+    $exitCode = Artisan::call('check', ['input' => workspace().'/sub']);
+
+    expect($exitCode)->toBe(0)
+        ->and(Artisan::output())->toContain('The 1 image is covered by the baseline.');
+
+    Http::assertNothingSent();
+});
+
+test('a baseline is not picked up from outside the current working directory', function () {
+    fakeAnalyze();
+    writeBaseline(['photo.png' => baselineEntry(createImage('photo.png'))]);
+    chdirWorkspace(workspace().'/elsewhere');
+
+    $exitCode = Artisan::call('check', ['input' => workspace()]);
+
+    expect($exitCode)->toBe(1)
+        ->and(Artisan::output())->toContain('1 of 1 image needs optimization');
+
+    Http::assertSentCount(1);
+});
+
+test('the json report for a fully covered directory is machine readable', function () {
+    chdirWorkspace();
+    fakeAnalyze();
+    writeBaseline(['photo.png' => baselineEntry(createImage('photo.png'))]);
+
+    $exitCode = Artisan::call('check', ['input' => workspace(), '--json' => true]);
+    $decoded = json_decode(Artisan::output(), true);
+
+    expect($exitCode)->toBe(0)
+        ->and($decoded['total'])->toBe(0)
+        ->and($decoded['needs_optimization'])->toBe(0)
+        ->and($decoded['baseline_skipped'])->toBe(1);
+
+    Http::assertNothingSent();
+});
+
+test('the json report includes the baseline-skipped count', function () {
+    chdirWorkspace();
+    fakeAnalyze();
+    createImage('photo.png');
+    writeBaseline(['covered.png' => baselineEntry(createImage('covered.png'))]);
+
+    $exitCode = Artisan::call('check', ['input' => workspace(), '--json' => true]);
+    $decoded = json_decode(Artisan::output(), true);
+
+    expect($exitCode)->toBe(1)
+        ->and($decoded['total'])->toBe(1)
+        ->and($decoded['baseline_skipped'])->toBe(1);
 });
 
 test('fails with an auth error when no token is configured', function () {

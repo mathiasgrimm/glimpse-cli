@@ -2,10 +2,13 @@
 
 namespace App\Commands;
 
+use App\Commands\Concerns\UpdatesBaseline;
 use GlimpseImg\Client;
 
 class OptimizeCommand extends GlimpseCommand
 {
+    use UpdatesBaseline;
+
     protected $signature = 'optimize
         {input : Path to the image, or - for stdin}
         {--quality= : Re-encode quality 1-100 (omit for the lossless optimizer chain)}
@@ -26,6 +29,7 @@ class OptimizeCommand extends GlimpseCommand
             $result = $client->optimize($this->readImage($input), $quality);
 
             $path = $this->writeResult($input, $output, 'optimized', $result);
+            $this->recordInBaseline($input, $path);
             $this->emit($result, $path);
 
             return self::SUCCESS;

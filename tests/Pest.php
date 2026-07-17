@@ -1,5 +1,6 @@
 <?php
 
+use App\Support\BaselineFile;
 use Illuminate\Support\Facades\File;
 use Tests\Fixtures\Images;
 use Tests\TestCase;
@@ -7,12 +8,17 @@ use Tests\TestCase;
 uses(TestCase::class)
     ->beforeEach(function () {
         $this->configHome = sys_get_temp_dir().'/glimpse-cli-test-'.bin2hex(random_bytes(6));
+        $this->originalCwd = (string) getcwd();
 
         putenv('XDG_CONFIG_HOME='.$this->configHome);
         putenv('GLIMPSE_TOKEN');
         putenv('GLIMPSE_API_URL');
     })
     ->afterEach(function () {
+        if ($this->originalCwd !== '') {
+            chdir($this->originalCwd);
+        }
+
         if ($this->configHome !== '' && is_dir($this->configHome)) {
             File::deleteDirectory($this->configHome);
         }
@@ -50,6 +56,94 @@ function createImage(string $name = 'photo.png', ?string $contents = null): stri
 }
 
 /**
+ * Make the test workspace the current working directory, creating it if
+ * needed. The baseline is anchored on the CWD, so baseline tests run from
+ * the workspace the way a user runs glimpse from their project root. The
+ * suite's afterEach restores the original CWD.
+ */
+function chdirWorkspace(?string $directory = null): void
+{
+    $directory ??= workspace();
+
+    if (! is_dir($directory)) {
+        mkdir($directory, 0755, true);
+    }
+
+    chdir($directory);
+}
+
+/**
+ * The path of the .glimpse-baseline.json in the directory (the test
+ * workspace by default).
+ */
+function baselinePath(?string $directory = null): string
+{
+    return ($directory ?? workspace()).'/'.BaselineFile::FILENAME;
+}
+
+/**
+ * Write a .glimpse-baseline.json into the directory (the test workspace by
+ * default), empty unless entries are given. Entries map relative paths to
+ * size/xxh128/via records; build current-content entries with
+ * baselineEntry().
+ *
+ * @param  array<string, array{size: int, xxh128: string, via: string}>  $files
+ */
+function writeBaseline(array $files = [], ?string $directory = null): void
+{
+    $directory ??= workspace();
+
+    if (! is_dir($directory)) {
+        mkdir($directory, 0755, true);
+    }
+
+    file_put_contents(
+        baselinePath($directory),
+        json_encode([
+            '_readme' => BaselineFile::README,
+            'files' => $files === [] ? new stdClass : $files,
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES).PHP_EOL,
+    );
+}
+
+/**
+ * Plant an unparseable .glimpse-baseline.json in the directory (the test
+ * workspace by default).
+ */
+function writeMalformedBaseline(?string $directory = null): void
+{
+    $directory ??= workspace();
+
+    if (! is_dir($directory)) {
+        mkdir($directory, 0755, true);
+    }
+
+    file_put_contents(baselinePath($directory), '{nope');
+}
+
+/**
+ * The baseline entry matching a file's current content, recorded by the
+ * given command.
+ *
+ * @return array{size: int, xxh128: string, via: string}
+ */
+function baselineEntry(string $path, string $via = 'analyze'): array
+{
+    return ['size' => (int) filesize($path), 'xxh128' => (string) hash_file('xxh128', $path), 'via' => $via];
+}
+
+/**
+ * The files map of the .glimpse-baseline.json in the directory (the test
+ * workspace by default).
+ *
+ * @return array<string, array{size: int, xxh128: string, via: string}>
+ */
+function baselineFiles(?string $directory = null): array
+{
+    return json_decode((string) file_get_contents(baselinePath($directory)), true)['files'];
+}
+
+/**
  * A canned successful analyze-endpoint response envelope.
  *
  * @return array{data: list<array<string, mixed>>}
@@ -79,4 +173,21 @@ function fakeTransformResponse(string $format = 'jpg', string $mimeType = 'image
         'width' => 1280,
         'height' => 720,
     ]];
+}
+
+/**
+ * Fake a transform endpoint (convert, optimize, resize, thumbnail) with a
+ * canned successful response reporting the given output format.
+ */
+function fakeTransform(string $endpoint, string $format = 'jpg'): void
+{
+    $mimeType = [
+        'jpg' => 'image/jpeg',
+        'png' => 'image/png',
+        'webp' => 'image/webp',
+        'gif' => 'image/gif',
+        'avif' => 'image/avif',
+    ][$format];
+
+    Http::fake(["*/v1/{$endpoint}" => Http::response(fakeTransformResponse($format, $mimeType))]);
 }

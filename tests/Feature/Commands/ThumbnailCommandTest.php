@@ -9,7 +9,7 @@ beforeEach(function () {
 });
 
 test('creates a thumbnail with API defaults and writes a .thumb output', function () {
-    Http::fake(['*/v1/thumbnail' => Http::response(fakeTransformResponse())]);
+    fakeTransform('thumbnail');
 
     $input = createImage('photo.png');
     $expectedOutput = dirname($input).'/photo.thumb.jpg';
@@ -30,7 +30,7 @@ test('creates a thumbnail with API defaults and writes a .thumb output', functio
 });
 
 test('--in-place overwrites the input file without --force', function () {
-    Http::fake(['*/v1/thumbnail' => Http::response(fakeTransformResponse('png', 'image/png'))]);
+    fakeTransform('thumbnail', 'png');
 
     $input = createImage('photo.png');
 
@@ -43,7 +43,7 @@ test('--in-place overwrites the input file without --force', function () {
 });
 
 test('passes width, height, and quality through to the API', function () {
-    Http::fake(['*/v1/thumbnail' => Http::response(fakeTransformResponse())]);
+    fakeTransform('thumbnail');
 
     $this->artisan('thumbnail', [
         'input' => createImage(),

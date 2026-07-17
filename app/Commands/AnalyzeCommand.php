@@ -3,11 +3,14 @@
 namespace App\Commands;
 
 use App\Commands\Concerns\AnalyzesImages;
+use App\Support\BaselineFile;
 use App\Support\ImageFinder;
+use App\Support\Paths;
 use GlimpseImg\ApiException;
 use GlimpseImg\Client;
 use GlimpseImg\ImageFormat;
 use GlimpseImg\SampleProbe;
+use Illuminate\Support\Str;
 use Symfony\Component\Console\Helper\TableSeparator;
 
 class AnalyzeCommand extends GlimpseCommand
@@ -19,6 +22,7 @@ class AnalyzeCommand extends GlimpseCommand
         {--format= : Only show estimates for this target format (jpg, png, webp, gif, avif)}
         {--optimize : Assume the optimizer chain runs on the re-encode}
         {--quality= : Assumed re-encode quality 1-100, perceptual scale; requires --optimize (defaults to 85)}
+        {--update-baseline : Record the scanned files into .glimpse-baseline.json in the current directory}
         {--json : Print the estimates as JSON}';
 
     protected $description = 'Analyze converted sizes without uploading the image';
@@ -39,6 +43,10 @@ class AnalyzeCommand extends GlimpseCommand
 
             if ($quality !== null && ! $this->option('optimize')) {
                 throw new ApiException('--quality requires --optimize.');
+            }
+
+            if ($this->option('update-baseline') && ! is_dir($input)) {
+                throw new ApiException('--update-baseline requires a directory input.');
             }
 
             return is_dir($input)
@@ -76,10 +84,40 @@ class AnalyzeCommand extends GlimpseCommand
 
     private function handleDirectory(Client $client, SampleProbe $probe, string $dir, ?ImageFormat $target, ?int $quality): int
     {
-        $files = (new ImageFinder)->find($dir);
+        $root = Paths::root();
+        $prefix = Paths::keyPrefix($root, $dir);
+
+        if ($this->option('update-baseline') && $prefix === null) {
+            throw new ApiException('--update-baseline requires the scanned directory to be inside the current working directory.');
+        }
+
+        $baseline = BaselineFile::load($root, forUpdate: (bool) $this->option('update-baseline'));
+        $found = (new ImageFinder)->find($dir);
+
+        if ($found === [] && ! $this->option('update-baseline')) {
+            throw new ApiException("No image files found in {$dir}.");
+        }
+
+        if ($found === []) {
+            if ($this->option('json')) {
+                $this->emitBatchJson([], 0);
+            }
+
+            $this->updateBaseline($baseline, $root, '', []);
+
+            return self::SUCCESS;
+        }
+
+        [$files, $skipped] = $this->partitionByBaseline($baseline, $root, $dir, $found);
 
         if ($files === []) {
-            throw new ApiException("No image files found in {$dir}.");
+            $this->option('json')
+                ? $this->emitBatchJson([], $skipped)
+                : $this->info($this->allCoveredMessage($skipped));
+
+            $this->updateBaseline($baseline, $root, '', []);
+
+            return self::SUCCESS;
         }
 
         $bar = $this->option('json') ? null : $this->output->createProgressBar(count($files));
@@ -101,11 +139,59 @@ class AnalyzeCommand extends GlimpseCommand
 
         $rows = $this->sortBySaved($rows);
 
-        $this->option('json') ? $this->emitBatchJson($rows) : $this->renderBatch($rows);
+        $this->option('json') ? $this->emitBatchJson($rows, $skipped) : $this->renderBatch($rows, $skipped);
+
+        $this->updateBaseline($baseline, $root, (string) $prefix, $rows);
 
         $failed = count(array_filter($rows, fn (array $row) => isset($row['error'])));
 
         return $failed < count($rows) ? self::SUCCESS : self::FAILURE;
+    }
+
+    /**
+     * Record the successfully analyzed rows into the baseline and write it
+     * out, using the size and hash captured from the analyzed bytes so the
+     * baseline reflects what was measured, not whatever is on disk by the
+     * time the batch finishes. Failed rows are not recorded: a file that
+     * could not be analyzed was not processed and must keep failing
+     * `check`. Entries whose file is gone are pruned; the rest carry over
+     * untouched. When every file failed the baseline is still saved (the
+     * prune is valid work) but the summary line is suppressed, so a run
+     * that exits with a failure does not end on a success-looking note.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     */
+    private function updateBaseline(BaselineFile $baseline, string $root, string $prefix, array $rows): void
+    {
+        if (! $this->option('update-baseline')) {
+            return;
+        }
+
+        $recorded = 0;
+
+        foreach ($rows as $row) {
+            if (isset($row['error'])) {
+                continue;
+            }
+
+            $recorded++;
+            $file = (string) $row['file'];
+            $entry = $this->analyzedHashes[$file] ?? null;
+
+            // Every successful row has an analyzedHashes entry; the
+            // record() fallback re-reading the disk is defensive and only
+            // runs if that invariant ever breaks.
+            $entry === null
+                ? $baseline->record($prefix.$file, rtrim($root, '/').'/'.$prefix.$file, (string) $this->getName())
+                : $baseline->put($prefix.$file, $entry['size'], $entry['xxh128'], (string) $this->getName());
+        }
+
+        $baseline->prune($root);
+        $baseline->save($root);
+
+        if (! $this->option('json') && ($rows === [] || $recorded > 0)) {
+            $this->info(sprintf('Baseline updated: %d %s (%s).', $baseline->count(), Str::plural('file', $baseline->count()), BaselineFile::FILENAME));
+        }
     }
 
     private function resolveFormat(): ?ImageFormat
@@ -155,7 +241,7 @@ class AnalyzeCommand extends GlimpseCommand
     /**
      * @param  list<array<string, mixed>>  $rows
      */
-    private function renderBatch(array $rows): void
+    private function renderBatch(array $rows, int $baselineSkipped): void
     {
         $headers = ['File', 'Source', 'Format', 'Estimated', 'Saved', 'Saved %'];
 
@@ -202,16 +288,21 @@ class AnalyzeCommand extends GlimpseCommand
         $this->table(['File', 'Source', 'Format', 'Estimated', 'Saved', 'Saved %'], $tableRows);
 
         $this->line('<fg=gray>Estimates are heuristics for picking a target format, not guarantees.</>');
+
+        if ($baselineSkipped > 0) {
+            $this->line($this->baselineSkippedLine($baselineSkipped));
+        }
     }
 
     /**
      * @param  list<array<string, mixed>>  $rows
      */
-    private function emitBatchJson(array $rows): void
+    private function emitBatchJson(array $rows, int $baselineSkipped): void
     {
         $this->line((string) json_encode([
             'files' => $rows,
             'totals' => $this->totals($rows),
+            'baseline_skipped' => $baselineSkipped,
         ], JSON_UNESCAPED_SLASHES));
     }
 

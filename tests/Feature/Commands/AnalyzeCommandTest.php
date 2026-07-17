@@ -160,6 +160,7 @@ test('scans a directory recursively and prints a row per image plus a totalizer'
 });
 
 test('directory scans respect .glimpseignore', function () {
+    chdirWorkspace();
     createImage('a.png');
     createImage('ignored/b.png');
 
@@ -264,4 +265,188 @@ test('prints a batch json object with files and totals', function () {
         ->and($decoded['totals']['files'])->toBe(2)
         ->and($decoded['totals']['failed'])->toBe(1)
         ->and($decoded['totals']['source_size'])->toBe(70);
+});
+
+test('directory scans skip files covered by the baseline', function () {
+    chdirWorkspace();
+    createImage('a.png');
+    writeBaseline(['covered.png' => baselineEntry(createImage('covered.png'))]);
+
+    $exitCode = Artisan::call('analyze', ['input' => workspace()]);
+    $output = Artisan::output();
+
+    expect($exitCode)->toBe(0)
+        ->and($output)->toContain('a.png')
+        ->and($output)->not->toContain('covered.png')
+        ->and($output)->toContain('Total: 1 files')
+        ->and($output)->toContain('1 file skipped by baseline.');
+
+    Http::assertSentCount(1);
+});
+
+test('--update-baseline records the scanned files into the cwd baseline', function () {
+    chdirWorkspace();
+    createImage('b.png');
+    createImage('nested/a.png');
+
+    $exitCode = Artisan::call('analyze', ['input' => workspace(), '--update-baseline' => true]);
+
+    expect($exitCode)->toBe(0)
+        ->and(Artisan::output())->toContain('Baseline updated: 2 files (.glimpse-baseline.json).')
+        ->and(baselineFiles())->toBe([
+            'b.png' => baselineEntry(workspace().'/b.png'),
+            'nested/a.png' => baselineEntry(workspace().'/nested/a.png'),
+        ]);
+});
+
+test('--update-baseline keeps valid entries without re-analyzing and prunes deleted files', function () {
+    chdirWorkspace();
+    $covered = createImage('covered.png');
+    createImage('new.png');
+
+    writeBaseline([
+        'covered.png' => baselineEntry($covered),
+        'deleted.png' => ['size' => 1, 'xxh128' => 'gone', 'via' => 'analyze'],
+    ]);
+
+    $exitCode = Artisan::call('analyze', ['input' => workspace(), '--update-baseline' => true]);
+
+    expect($exitCode)->toBe(0)
+        ->and(array_keys(baselineFiles()))->toBe(['covered.png', 'new.png']);
+
+    Http::assertSentCount(1);
+});
+
+test('--update-baseline does not record files that failed to analyze', function () {
+    chdirWorkspace();
+    createImage('good.png');
+    createImage('bad.png', 'not an image');
+
+    $exitCode = Artisan::call('analyze', ['input' => workspace(), '--update-baseline' => true]);
+
+    expect($exitCode)->toBe(0)
+        ->and(array_keys(baselineFiles()))->toBe(['good.png']);
+});
+
+test('--update-baseline requires a directory input', function () {
+    $this->artisan('analyze', ['input' => createImage(), '--update-baseline' => true])
+        ->expectsOutputToContain('--update-baseline requires a directory input.')
+        ->assertExitCode(1);
+
+    Http::assertNothingSent();
+});
+
+test('a malformed baseline fails loudly even when the directory has no images', function () {
+    chdirWorkspace();
+    writeMalformedBaseline();
+
+    $this->artisan('analyze', ['input' => workspace()])
+        ->expectsOutputToContain('Malformed')
+        ->assertExitCode(1);
+
+    Http::assertNothingSent();
+});
+
+test('the cwd baseline governs a subdirectory scan', function () {
+    chdirWorkspace();
+    $covered = createImage('sub/covered.png');
+    createImage('sub/other.png');
+    writeBaseline(['sub/covered.png' => baselineEntry($covered)]);
+
+    $exitCode = Artisan::call('analyze', ['input' => workspace().'/sub']);
+    $output = Artisan::output();
+
+    expect($exitCode)->toBe(0)
+        ->and($output)->toContain('other.png')
+        ->and($output)->toContain('1 file skipped by baseline.');
+
+    Http::assertSentCount(1);
+});
+
+test('a baseline is not picked up from outside the current working directory', function () {
+    writeBaseline(['covered.png' => baselineEntry(createImage('covered.png'))]);
+    chdirWorkspace(workspace().'/elsewhere');
+
+    $exitCode = Artisan::call('analyze', ['input' => workspace()]);
+    $output = Artisan::output();
+
+    expect($exitCode)->toBe(0)
+        ->and($output)->toContain('covered.png')
+        ->and($output)->not->toContain('skipped by baseline');
+
+    Http::assertSentCount(1);
+});
+
+test('--update-baseline writes a subdirectory scan into the cwd baseline, not a new one in the subdirectory', function () {
+    chdirWorkspace();
+    createImage('sub/new.png');
+
+    $exitCode = Artisan::call('analyze', ['input' => workspace().'/sub', '--update-baseline' => true]);
+
+    expect($exitCode)->toBe(0)
+        ->and(array_keys(baselineFiles()))->toBe(['sub/new.png'])
+        ->and(file_exists(baselinePath(workspace().'/sub')))->toBeFalse();
+});
+
+test('--update-baseline requires the scan to be inside the current working directory', function () {
+    createImage('sub/photo.png');
+    chdirWorkspace(workspace().'/sub');
+
+    $this->artisan('analyze', ['input' => workspace(), '--update-baseline' => true])
+        ->expectsOutputToContain('inside the current working directory')
+        ->assertExitCode(1);
+
+    Http::assertNothingSent();
+});
+
+test('--update-baseline still prunes on an all-failed run but suppresses the success line', function () {
+    chdirWorkspace();
+    createImage('bad.png', 'not an image');
+    writeBaseline(['gone.png' => ['size' => 1, 'xxh128' => 'stale', 'via' => 'analyze']]);
+
+    $exitCode = Artisan::call('analyze', ['input' => workspace(), '--update-baseline' => true]);
+
+    expect($exitCode)->toBe(1)
+        ->and(Artisan::output())->not->toContain('Baseline updated')
+        ->and(baselineFiles())->toBe([]);
+
+    Http::assertNothingSent();
+});
+
+test('--update-baseline prunes deleted files even when no images remain', function () {
+    chdirWorkspace();
+    writeBaseline(['gone.png' => ['size' => 1, 'xxh128' => 'stale', 'via' => 'analyze']]);
+
+    $exitCode = Artisan::call('analyze', ['input' => workspace(), '--update-baseline' => true]);
+
+    expect($exitCode)->toBe(0)
+        ->and(Artisan::output())->toContain('Baseline updated: 0 files')
+        ->and(baselineFiles())->toBe([]);
+
+    Http::assertNothingSent();
+});
+
+test('--json with --update-baseline emits pure json and still writes the baseline', function () {
+    chdirWorkspace();
+    createImage('a.png');
+
+    $exitCode = Artisan::call('analyze', ['input' => workspace(), '--json' => true, '--update-baseline' => true]);
+    $decoded = json_decode(Artisan::output(), true);
+
+    expect($exitCode)->toBe(0)
+        ->and($decoded['files'])->toHaveCount(1)
+        ->and(array_keys(baselineFiles()))->toBe(['a.png']);
+});
+
+test('the batch json includes the baseline-skipped count', function () {
+    chdirWorkspace();
+    createImage('a.png');
+    writeBaseline(['covered.png' => baselineEntry(createImage('covered.png'))]);
+
+    $exitCode = Artisan::call('analyze', ['input' => workspace(), '--json' => true]);
+    $decoded = json_decode(Artisan::output(), true);
+
+    expect($exitCode)->toBe(0)
+        ->and($decoded['files'])->toHaveCount(1)
+        ->and($decoded['baseline_skipped'])->toBe(1);
 });

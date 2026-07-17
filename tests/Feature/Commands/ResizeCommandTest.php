@@ -9,7 +9,7 @@ beforeEach(function () {
 });
 
 test('resizes and writes a .resized output next to the input', function () {
-    Http::fake(['*/v1/resize' => Http::response(fakeTransformResponse())]);
+    fakeTransform('resize');
 
     $input = createImage('photo.png');
     $expectedOutput = dirname($input).'/photo.resized.jpg';
@@ -25,7 +25,7 @@ test('resizes and writes a .resized output next to the input', function () {
 });
 
 test('--in-place overwrites the input file without --force', function () {
-    Http::fake(['*/v1/resize' => Http::response(fakeTransformResponse('png', 'image/png'))]);
+    fakeTransform('resize', 'png');
 
     $input = createImage('photo.png');
 
@@ -38,7 +38,7 @@ test('--in-place overwrites the input file without --force', function () {
 });
 
 test('--in-place replaces the input when the API returns a different format', function () {
-    Http::fake(['*/v1/resize' => Http::response(fakeTransformResponse())]);
+    fakeTransform('resize');
 
     $input = createImage('photo.png');
     $expectedOutput = dirname($input).'/photo.jpg';
@@ -52,7 +52,7 @@ test('--in-place replaces the input when the API returns a different format', fu
 });
 
 test('--optimize sends optimize without quality', function () {
-    Http::fake(['*/v1/resize' => Http::response(fakeTransformResponse())]);
+    fakeTransform('resize');
 
     $this->artisan('resize', ['input' => createImage('photo.png'), '--width' => '800', '--optimize' => true])
         ->assertExitCode(0);
@@ -62,7 +62,7 @@ test('--optimize sends optimize without quality', function () {
 });
 
 test('--optimize with --quality sends both', function () {
-    Http::fake(['*/v1/resize' => Http::response(fakeTransformResponse())]);
+    fakeTransform('resize');
 
     $this->artisan('resize', ['input' => createImage('photo.png'), '--width' => '800', '--optimize' => true, '--quality' => '70'])
         ->assertExitCode(0);
@@ -72,7 +72,7 @@ test('--optimize with --quality sends both', function () {
 });
 
 test('omits optimize and quality from the payload when the flags are not given', function () {
-    Http::fake(['*/v1/resize' => Http::response(fakeTransformResponse())]);
+    fakeTransform('resize');
 
     $this->artisan('resize', ['input' => createImage('photo.png'), '--width' => '800'])
         ->assertExitCode(0);

@@ -9,7 +9,7 @@ beforeEach(function () {
 });
 
 test('optimizes and writes a .optimized output next to the input', function () {
-    Http::fake(['*/v1/optimize' => Http::response(fakeTransformResponse())]);
+    fakeTransform('optimize');
 
     $input = createImage('photo.png');
     $expectedOutput = dirname($input).'/photo.optimized.jpg';
@@ -24,7 +24,7 @@ test('optimizes and writes a .optimized output next to the input', function () {
 });
 
 test('--in-place overwrites the input file without --force', function () {
-    Http::fake(['*/v1/optimize' => Http::response(fakeTransformResponse('png', 'image/png'))]);
+    fakeTransform('optimize', 'png');
 
     $input = createImage('photo.png');
 
@@ -34,6 +34,21 @@ test('--in-place overwrites the input file without --force', function () {
 
     expect(file_get_contents($input))->toBe(Images::jpg())
         ->and(file_exists(dirname($input).'/photo.optimized.png'))->toBeFalse();
+});
+
+test('--in-place records the overwritten input with its new content', function () {
+    chdirWorkspace();
+    fakeTransform('optimize', 'png');
+
+    $input = createImage('photo.png');
+    writeBaseline();
+
+    $this->artisan('optimize', ['input' => $input, '--in-place' => true])
+        ->assertExitCode(0);
+
+    expect(baselineFiles())->toBe([
+        'photo.png' => baselineEntry($input, 'optimize'),
+    ]);
 });
 
 test('rejects a non-numeric quality before any HTTP request', function () {

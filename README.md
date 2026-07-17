@@ -187,6 +187,7 @@ Point it at a directory and glimpse scans every image in it, recursively, behind
 ```bash
 glimpse analyze assets/ --format=avif            # what would AVIF buy, file by file
 glimpse analyze assets/                          # best format per image
+glimpse analyze assets/ --update-baseline        # record the results as the baseline
 ```
 
 <p align="center">
@@ -221,7 +222,7 @@ An image "needs optimization" when the format that saves the most (the same pick
 
 #### .glimpseignore
 
-Drop a `.glimpseignore` file in the directory you scan to exclude paths, using gitignore syntax:
+Drop a `.glimpseignore` file at the project root to exclude paths, using gitignore syntax:
 
 ```gitignore
 # generated assets, not worth optimizing
@@ -231,7 +232,52 @@ public/build/
 !logo.gif
 ```
 
-Patterns are relative to the scanned directory. Negated patterns (`!logo.gif`) re-include files, with the same caveat as git: a file inside an ignored directory cannot be re-included. `analyze <dir>` honors the same file.
+Like the baseline below, the file is read from the directory you run glimpse from, and patterns are relative to it: with the rules above, `glimpse check .` and `glimpse check public/` both skip `public/build/`. Negated patterns (`!logo.gif`) re-include files, with the same caveat as git: a file inside an ignored directory cannot be re-included. `analyze <dir>` honors the same file, and the transform commands honor it too by never recording an ignored file into the baseline.
+
+#### .glimpse-baseline.json
+
+Adopting glimpse in an existing project should not require converting every image on day one. A `.glimpse-baseline.json` file at the project root records files you have already dealt with, so `check <dir>` and `analyze <dir>` skip them and only new or changed images get flagged. It is the same idea as phpstan's baseline: accept the current state, gate everything from here on.
+
+Generate it by scanning the directory:
+
+```bash
+glimpse analyze assets/ --update-baseline
+```
+
+The file lists each image with its size, content hash, and the operation that put it there, under a composer.lock-style `_readme` header that explains the format to anyone reading it in review:
+
+```json
+{
+    "_readme": [
+        "Images already handled by glimpse: check and analyze skip a file while its size and xxh128 content hash still match its entry.",
+        "..."
+    ],
+    "files": {
+        "photos/hero.png": {
+            "size": 482133,
+            "xxh128": "5f3d0a9c1b2e4d6f8a7c9e0b1d2f3a4c",
+            "via": "analyze"
+        },
+        "photos/hero.webp": {
+            "size": 98342,
+            "xxh128": "9a1c3e5f7b2d4a6c8e0f1a3b5c7d9e0f",
+            "via": "optimize"
+        }
+    }
+}
+```
+
+An image is skipped only while its content still matches the recorded entry. Replace a baselined file with a new version and it re-enters the scan automatically. Where `.glimpseignore` says "never look at these paths", the baseline says "these exact file contents are already handled".
+
+The `via` field separates accepted debt from finished work: `analyze` means the file was taken as-is by `--update-baseline`, a command name (`convert`, `resize`, `thumbnail`) means glimpse produced or processed it, and `optimize` means the optimizer chain ran, whether through the `optimize` command or a transform's `--optimize` flag. When you burn down a bulk-adopted baseline later, the `analyze` entries are the ones still waiting for real treatment.
+
+Every command reads the baseline (and `.glimpseignore`) from the current working directory, the way composer and phpstan resolve their config: run glimpse from the project root and the baseline there governs the run, with entries keyed relative to it (scanning `assets/` matches keys like `assets/hero.png`). There is no upward search; run glimpse from anywhere else and the baseline simply does not apply. `--update-baseline` writes the baseline to the current directory and requires the scanned directory to be inside it.
+
+The transform commands keep the baseline current automatically: `convert` and `optimize` record the written output and its source (an in-place conversion that replaced the source also cleans up its old entry), while `resize` and `thumbnail` record only the file they produced. Writing to stdout or to a path outside the working directory records nothing, and a baseline problem never fails a transform that already succeeded; it degrades to a warning on STDERR. The commands never create the file; that is `--update-baseline`'s job. Re-running `analyze <dir> --update-baseline` refreshes changed entries and prunes deleted files.
+
+The baseline only applies to directory scans. Naming a file explicitly (`glimpse analyze photo.png`) always analyzes it. Commit the file so CI and your teammates share the same starting point.
+
+Baseline writes never race each other: a run that will write takes an exclusive lock on the file before doing anything else, creating it is exclusive too, and the content lands in a temporary file swapped atomically into place. A second concurrent writer fails fast with a clear error (`analyze --update-baseline`) or degrades to a STDERR warning (the transforms) instead of silently overwriting entries, readers never observe a half-written file, and a failed write leaves the previous baseline untouched.
 
 ### Info
 
@@ -277,7 +323,7 @@ jobs:
           GLIMPSE_TOKEN: ${{ secrets.GLIMPSE_TOKEN }}
 ```
 
-GitHub's `ubuntu-latest` runners ship PHP out of the box, so the PHAR runs as-is. Exclude paths you do not control (vendored packages, generated assets) with a [`.glimpseignore`](#glimpseignore) file at the repo root, and tune the failure bar with `--threshold`. When the check fails, fix it by running the optimizer locally:
+GitHub's `ubuntu-latest` runners ship PHP out of the box, so the PHAR runs as-is. Exclude paths you do not control (vendored packages, generated assets) with a [`.glimpseignore`](#glimpseignore) file at the repo root, and tune the failure bar with `--threshold`. Rolling glimpse out on a repo full of legacy images? Commit a [`.glimpse-baseline.json`](#glimpse-baselinejson) so the gate only fails on new or changed files. When the check fails, fix it by running the optimizer locally:
 
 ```bash
 glimpse optimize path/to/offender.png --in-place
