@@ -43,6 +43,7 @@ test('--in-place overwrites the input file without --force', function () {
 });
 
 test('records only the output in an existing baseline', function () {
+    chdirWorkspace();
     Http::fake(['*/v1/thumbnail' => Http::response(fakeTransformResponse())]);
 
     $input = createImage('photo.png');

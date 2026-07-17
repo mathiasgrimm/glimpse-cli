@@ -260,6 +260,7 @@ test('errors on a missing input file', function () {
 });
 
 test('records the source and output in an existing baseline', function () {
+    chdirWorkspace();
     Http::fake(['*/v1/convert' => Http::response(fakeTransformResponse('webp', 'image/webp'))]);
 
     $input = createImage('photo.png');
@@ -274,7 +275,8 @@ test('records the source and output in an existing baseline', function () {
     ]);
 });
 
-test('walks up to the nearest baseline and records paths relative to it', function () {
+test('records paths relative to the current working directory', function () {
+    chdirWorkspace();
     Http::fake(['*/v1/convert' => Http::response(fakeTransformResponse('webp', 'image/webp'))]);
 
     $input = createImage('nested/photo.png');
@@ -287,10 +289,10 @@ test('walks up to the nearest baseline and records paths relative to it', functi
 });
 
 test('creates no baseline when none exists', function () {
+    chdirWorkspace();
     Http::fake(['*/v1/convert' => Http::response(fakeTransformResponse('webp', 'image/webp'))]);
 
     $input = createImage('photo.png');
-    mkdir(workspace().'/.git');
 
     $this->artisan('convert', ['input' => $input, '--format' => 'webp'])
         ->assertExitCode(0);
@@ -298,7 +300,22 @@ test('creates no baseline when none exists', function () {
     expect(file_exists(workspace().'/.glimpse-baseline.json'))->toBeFalse();
 });
 
+test('a baseline is not picked up from outside the current working directory', function () {
+    Http::fake(['*/v1/convert' => Http::response(fakeTransformResponse('webp', 'image/webp'))]);
+
+    $input = createImage('nested/photo.png');
+    writeBaseline([]);
+    chdirWorkspace(workspace().'/nested');
+
+    $this->artisan('convert', ['input' => $input, '--format' => 'webp'])
+        ->assertExitCode(0);
+
+    expect(readBaseline()['files'])->toBe([])
+        ->and(file_exists(workspace().'/nested/.glimpse-baseline.json'))->toBeFalse();
+});
+
 test('--in-place with an extension change records only the output', function () {
+    chdirWorkspace();
     Http::fake(['*/v1/convert' => Http::response(fakeTransformResponse('webp', 'image/webp'))]);
 
     $input = createImage('photo.png');
@@ -312,12 +329,12 @@ test('--in-place with an extension change records only the output', function () 
     ]);
 });
 
-test('an output outside the baseline root records nothing', function () {
+test('an output outside the current working directory records nothing', function () {
+    chdirWorkspace();
     Http::fake(['*/v1/convert' => Http::response(fakeTransformResponse('webp', 'image/webp'))]);
 
     $input = createImage('photo.png');
     writeBaseline([]);
-    mkdir(test()->configHome.'/.git');
 
     $this->artisan('convert', ['input' => $input, '--output' => test()->configHome.'/outside.webp'])
         ->assertExitCode(0);
@@ -326,6 +343,7 @@ test('an output outside the baseline root records nothing', function () {
 });
 
 test('--in-place with an extension change drops the stale source entry', function () {
+    chdirWorkspace();
     Http::fake(['*/v1/convert' => Http::response(fakeTransformResponse('webp', 'image/webp'))]);
 
     $input = createImage('photo.png');
@@ -340,6 +358,7 @@ test('--in-place with an extension change drops the stale source entry', functio
 });
 
 test('a malformed baseline does not fail a conversion that succeeded', function () {
+    chdirWorkspace();
     Http::fake(['*/v1/convert' => Http::response(fakeTransformResponse('webp', 'image/webp'))]);
 
     $input = createImage('photo.png');

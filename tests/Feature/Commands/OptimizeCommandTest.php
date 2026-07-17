@@ -37,6 +37,7 @@ test('--in-place overwrites the input file without --force', function () {
 });
 
 test('records the source and output in an existing baseline', function () {
+    chdirWorkspace();
     Http::fake(['*/v1/optimize' => Http::response(fakeTransformResponse())]);
 
     $input = createImage('photo.png');
@@ -52,6 +53,7 @@ test('records the source and output in an existing baseline', function () {
 });
 
 test('--in-place records the overwritten input with its new content', function () {
+    chdirWorkspace();
     Http::fake(['*/v1/optimize' => Http::response(fakeTransformResponse('png', 'image/png'))]);
 
     $input = createImage('photo.png');
@@ -66,10 +68,10 @@ test('--in-place records the overwritten input with its new content', function (
 });
 
 test('creates no baseline when none exists', function () {
+    chdirWorkspace();
     Http::fake(['*/v1/optimize' => Http::response(fakeTransformResponse())]);
 
     $input = createImage('photo.png');
-    mkdir(workspace().'/.git');
 
     $this->artisan('optimize', ['input' => $input])
         ->assertExitCode(0);

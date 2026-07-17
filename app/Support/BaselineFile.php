@@ -7,8 +7,9 @@ use InvalidArgumentException;
 use stdClass;
 
 /**
- * A .glimpse-baseline.json file: a JSON list of already-processed files at
- * the scan root, so analyze and check skip them. Entries match on relative
+ * A .glimpse-baseline.json file: a JSON list of already-processed files in
+ * the directory glimpse is run from, so analyze and check skip them.
+ * Entries match on relative
  * path plus size plus xxh128 content hash; a file whose content changed
  * re-enters the scan. The hash is for change detection, not security, so
  * a fast non-cryptographic digest is the right tool.
@@ -101,37 +102,28 @@ final class BaselineFile
     }
 
     /**
-     * Walk up from the directory and return the first one containing a
-     * baseline file, or null when there is none. The walk stops at a
-     * repository boundary (a directory containing .git) or the filesystem
-     * root, so a stray baseline outside the project can never capture a
-     * scan or a write.
+     * The directory whose baseline governs this run: always the current
+     * working directory, the way composer, phpunit, and phpstan resolve
+     * their config. No upward search, so a baseline elsewhere can never
+     * capture a scan or a write; run glimpse from the project root to use
+     * the project's baseline.
      */
-    public static function findRoot(string $directory): ?string
+    public static function root(): string
     {
-        $dir = rtrim(str_replace('\\', '/', $directory), '/');
+        return rtrim(str_replace('\\', '/', (string) getcwd()), '/');
+    }
 
-        if ($dir === '') {
-            $dir = '/';
-        }
+    /**
+     * Whether the path lies strictly inside the directory. Both are
+     * expected to be canonical absolute paths; separators are normalized
+     * before comparing.
+     */
+    public static function contains(string $directory, string $path): bool
+    {
+        $directory = rtrim(str_replace('\\', '/', $directory), '/');
+        $path = str_replace('\\', '/', $path);
 
-        while (true) {
-            if (is_file($dir.'/'.self::FILENAME)) {
-                return $dir;
-            }
-
-            if (file_exists($dir.'/.git')) {
-                return null;
-            }
-
-            $parent = dirname($dir);
-
-            if ($parent === $dir) {
-                return null;
-            }
-
-            $dir = $parent;
-        }
+        return $directory !== '' && str_starts_with($path, $directory.'/');
     }
 
     /**

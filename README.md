@@ -236,7 +236,7 @@ Patterns are relative to the scanned directory. Negated patterns (`!logo.gif`) r
 
 #### .glimpse-baseline.json
 
-Adopting glimpse in an existing project should not require converting every image on day one. A `.glimpse-baseline.json` file at the scan root records files you have already dealt with, so `check <dir>` and `analyze <dir>` skip them and only new or changed images get flagged. It is the same idea as phpstan's baseline: accept the current state, gate everything from here on.
+Adopting glimpse in an existing project should not require converting every image on day one. A `.glimpse-baseline.json` file at the project root records files you have already dealt with, so `check <dir>` and `analyze <dir>` skip them and only new or changed images get flagged. It is the same idea as phpstan's baseline: accept the current state, gate everything from here on.
 
 Generate it by scanning the directory:
 
@@ -259,9 +259,9 @@ The file lists each image with its size and content hash:
 
 An image is skipped only while its content still matches the recorded entry. Replace a baselined file with a new version and it re-enters the scan automatically. Where `.glimpseignore` says "never look at these paths", the baseline says "these exact file contents are already handled".
 
-Every command finds the baseline the way git finds `.git`: by searching upward, from the directory being scanned (`analyze`, `check`) or from the file being written (`convert`, `optimize`, `resize`, `thumbnail`), stopping at the repository boundary. Scanning a subdirectory of a baselined project therefore honors the project's baseline, and `--update-baseline` updates the nearest existing baseline, creating one at the scan root only when none exists yet.
+Every command reads the baseline from the current working directory, the way composer and phpstan resolve their config: run glimpse from the project root and the baseline there governs the run, with entries keyed relative to it (scanning `assets/` matches keys like `assets/hero.png`). There is no upward search; run glimpse from anywhere else and the baseline simply does not apply. `--update-baseline` writes the baseline to the current directory and requires the scanned directory to be inside it.
 
-The transform commands keep the baseline current automatically: `convert` and `optimize` record the written output and its source (an in-place conversion that replaced the source also cleans up its old entry), while `resize` and `thumbnail` record only the file they produced. Writing to stdout records nothing, and a baseline problem never fails a transform that already succeeded; it degrades to a warning on STDERR. The commands never create the file; that is `--update-baseline`'s job. Re-running `analyze <dir> --update-baseline` refreshes changed entries and prunes deleted files.
+The transform commands keep the baseline current automatically: `convert` and `optimize` record the written output and its source (an in-place conversion that replaced the source also cleans up its old entry), while `resize` and `thumbnail` record only the file they produced. Writing to stdout or to a path outside the working directory records nothing, and a baseline problem never fails a transform that already succeeded; it degrades to a warning on STDERR. The commands never create the file; that is `--update-baseline`'s job. Re-running `analyze <dir> --update-baseline` refreshes changed entries and prunes deleted files.
 
 The baseline only applies to directory scans. Naming a file explicitly (`glimpse analyze photo.png`) always analyzes it. Commit the file so CI and your teammates share the same starting point.
 

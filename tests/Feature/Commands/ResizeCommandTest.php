@@ -82,6 +82,7 @@ test('omits optimize and quality from the payload when the flags are not given',
 });
 
 test('records only the output in an existing baseline', function () {
+    chdirWorkspace();
     Http::fake(['*/v1/resize' => Http::response(fakeTransformResponse())]);
 
     $input = createImage('photo.png');

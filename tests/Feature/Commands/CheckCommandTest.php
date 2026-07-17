@@ -173,6 +173,7 @@ test('passes when .glimpseignore excludes every offender', function () {
 });
 
 test('passes when the baseline covers every offender', function () {
+    chdirWorkspace();
     fakeAnalyze();
     writeBaseline(['photo.png' => baselineEntry(createImage('photo.png'))]);
 
@@ -185,6 +186,7 @@ test('passes when the baseline covers every offender', function () {
 });
 
 test('fails again when a baselined file changed', function () {
+    chdirWorkspace();
     fakeAnalyze();
     $path = createImage('photo.png');
     $entry = baselineEntry($path);
@@ -199,6 +201,7 @@ test('fails again when a baselined file changed', function () {
 });
 
 test('reports the baseline-skipped count alongside remaining offenders', function () {
+    chdirWorkspace();
     fakeAnalyze();
     createImage('photo.png');
     writeBaseline(['covered.png' => baselineEntry(createImage('covered.png'))]);
@@ -214,6 +217,7 @@ test('reports the baseline-skipped count alongside remaining offenders', functio
 });
 
 test('an explicit single file is checked even when baselined', function () {
+    chdirWorkspace();
     fakeAnalyze();
     $path = createImage('photo.png');
     writeBaseline(['photo.png' => baselineEntry($path)]);
@@ -226,6 +230,7 @@ test('an explicit single file is checked even when baselined', function () {
 });
 
 test('a malformed baseline fails loudly before any HTTP request', function () {
+    chdirWorkspace();
     fakeAnalyze();
     createImage('photo.png');
     file_put_contents(workspace().'/.glimpse-baseline.json', '{nope');
@@ -237,7 +242,8 @@ test('a malformed baseline fails loudly before any HTTP request', function () {
     Http::assertNothingSent();
 });
 
-test('a baseline above the scanned directory is honored', function () {
+test('the cwd baseline governs a subdirectory scan', function () {
+    chdirWorkspace();
     fakeAnalyze();
     $covered = createImage('sub/photo.png');
     writeBaseline(['sub/photo.png' => baselineEntry($covered)]);
@@ -250,7 +256,21 @@ test('a baseline above the scanned directory is honored', function () {
     Http::assertNothingSent();
 });
 
+test('a baseline is not picked up from outside the current working directory', function () {
+    fakeAnalyze();
+    writeBaseline(['photo.png' => baselineEntry(createImage('photo.png'))]);
+    chdirWorkspace(workspace().'/elsewhere');
+
+    $exitCode = Artisan::call('check', ['input' => workspace()]);
+
+    expect($exitCode)->toBe(1)
+        ->and(Artisan::output())->toContain('1 of 1 images need optimization');
+
+    Http::assertSentCount(1);
+});
+
 test('the json report for a fully covered directory is machine readable', function () {
+    chdirWorkspace();
     fakeAnalyze();
     writeBaseline(['photo.png' => baselineEntry(createImage('photo.png'))]);
 
@@ -266,6 +286,7 @@ test('the json report for a fully covered directory is machine readable', functi
 });
 
 test('the json report includes the baseline-skipped count', function () {
+    chdirWorkspace();
     fakeAnalyze();
     createImage('photo.png');
     writeBaseline(['covered.png' => baselineEntry(createImage('covered.png'))]);

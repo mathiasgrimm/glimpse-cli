@@ -60,33 +60,29 @@ trait AnalyzesImages
     }
 
     /**
-     * The directory whose baseline governs a scan: the nearest one at or
-     * above the scanned directory (found the way git finds .git), or the
-     * scanned directory itself when none exists yet.
-     */
-    private function baselineRootFor(string $dir): string
-    {
-        $real = $this->canonicalDir($dir);
-
-        return BaselineFile::findRoot($real) ?? $real;
-    }
-
-    /**
      * The key prefix that maps scan-relative paths to root-relative
-     * baseline keys, e.g. 'sub/' when scanning <root>/sub. Empty when the
-     * scan directory is the baseline root.
+     * baseline keys, e.g. 'assets/' when scanning <root>/assets. Empty
+     * when the scan directory is the root itself, null when it lies
+     * outside the root: its files cannot have root-relative keys, so the
+     * baseline neither skips nor records them.
      */
-    private function baselineKeyPrefix(string $root, string $dir): string
+    private function baselineKeyPrefix(string $root, string $dir): ?string
     {
         $real = $this->canonicalDir($dir);
 
-        return $real === $root ? '' : BaselineFile::relativePath($root, $real).'/';
+        if ($real === $root) {
+            return '';
+        }
+
+        return BaselineFile::contains($root, $real)
+            ? BaselineFile::relativePath($root, $real).'/'
+            : null;
     }
 
     /**
      * The canonical form of a scan directory: its realpath with separators
      * normalized to forward slashes, or the given path minus any trailing
-     * slash when it cannot be resolved. Must match findRoot's
+     * slash when it cannot be resolved. Must match BaselineFile::root()'s
      * normalization exactly, or the root-equality check above misfires.
      */
     private function canonicalDir(string $dir): string
@@ -100,7 +96,8 @@ trait AnalyzesImages
 
     /**
      * Split the found files into the ones still to analyze and the count
-     * covered by the baseline.
+     * covered by the baseline. A scan directory outside the root is left
+     * untouched: no file gets skipped.
      *
      * @param  list<string>  $files
      * @return array{list<string>, int}
@@ -108,6 +105,10 @@ trait AnalyzesImages
     private function partitionByBaseline(BaselineFile $baseline, string $root, string $dir, array $files): array
     {
         $prefix = $this->baselineKeyPrefix($root, $dir);
+
+        if ($prefix === null) {
+            return [$files, 0];
+        }
 
         $remaining = array_values(array_filter(
             $files,

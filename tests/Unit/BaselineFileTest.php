@@ -294,33 +294,18 @@ test('load fails loudly on a malformed baseline', function (string $content) {
     'entry with non-integer size' => '{"files": {"a.png": {"size": "70", "xxh128": "abc"}}}',
 ]);
 
-test('findRoot walks up to the nearest baseline', function () {
-    createImage('nested/deep/photo.png');
-    writeBaseline([]);
+test('root is the current working directory with normalized separators', function () {
+    chdirWorkspace();
 
-    expect(BaselineFile::findRoot(workspace().'/nested/deep'))->toBe(workspace())
-        ->and(BaselineFile::findRoot(workspace()))->toBe(workspace());
+    expect(BaselineFile::root())->toBe(str_replace('\\', '/', (string) realpath(workspace())));
 });
 
-test('findRoot returns null when no baseline exists up the tree', function () {
-    createImage('nested/photo.png');
-    mkdir(workspace().'/.git');
-
-    expect(BaselineFile::findRoot(workspace().'/nested'))->toBeNull();
-});
-
-test('findRoot stops at a repository boundary', function () {
-    createImage('nested/photo.png');
-    mkdir(workspace().'/.git');
-    writeBaseline([], test()->configHome);
-
-    expect(BaselineFile::findRoot(workspace().'/nested'))->toBeNull();
-});
-
-test('findRoot finds a baseline sitting at the repository boundary', function () {
-    createImage('nested/photo.png');
-    mkdir(workspace().'/.git');
-    writeBaseline([]);
-
-    expect(BaselineFile::findRoot(workspace().'/nested'))->toBe(workspace());
+test('contains accepts only paths strictly inside the directory', function () {
+    expect(BaselineFile::contains('/scan/root', '/scan/root/a.png'))->toBeTrue()
+        ->and(BaselineFile::contains('/scan/root/', '/scan/root/sub/a.png'))->toBeTrue()
+        ->and(BaselineFile::contains('C:\\scan\\root', 'C:\\scan\\root\\a.png'))->toBeTrue()
+        ->and(BaselineFile::contains('/scan/root', '/scan/root'))->toBeFalse()
+        ->and(BaselineFile::contains('/scan/root', '/scan/rootbeer/a.png'))->toBeFalse()
+        ->and(BaselineFile::contains('/scan/root', '/elsewhere/a.png'))->toBeFalse()
+        ->and(BaselineFile::contains('', '/a.png'))->toBeFalse();
 });

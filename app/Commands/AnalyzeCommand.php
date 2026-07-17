@@ -20,7 +20,7 @@ class AnalyzeCommand extends GlimpseCommand
         {--format= : Only show estimates for this target format (jpg, png, webp, gif, avif)}
         {--optimize : Assume the optimizer chain runs on the re-encode}
         {--quality= : Assumed re-encode quality 1-100, perceptual scale; requires --optimize (defaults to 85)}
-        {--update-baseline : Record the scanned files into .glimpse-baseline.json at the scan root}
+        {--update-baseline : Record the scanned files into .glimpse-baseline.json in the current directory}
         {--json : Print the estimates as JSON}';
 
     protected $description = 'Analyze converted sizes without uploading the image';
@@ -88,8 +88,13 @@ class AnalyzeCommand extends GlimpseCommand
             throw new ApiException("No image files found in {$dir}.");
         }
 
-        $root = $this->baselineRootFor($dir);
+        $root = BaselineFile::root();
         $baseline = BaselineFile::load($root);
+        $prefix = $this->baselineKeyPrefix($root, $dir);
+
+        if ($this->option('update-baseline') && $prefix === null) {
+            throw new ApiException('--update-baseline requires the scanned directory to be inside the current working directory.');
+        }
 
         if ($found === []) {
             if ($this->option('json')) {
@@ -134,7 +139,7 @@ class AnalyzeCommand extends GlimpseCommand
 
         $this->option('json') ? $this->emitBatchJson($rows, $skipped) : $this->renderBatch($rows, $skipped);
 
-        $this->updateBaseline($baseline, $root, $this->baselineKeyPrefix($root, $dir), $rows);
+        $this->updateBaseline($baseline, $root, (string) $prefix, $rows);
 
         $failed = count(array_filter($rows, fn (array $row) => isset($row['error'])));
 

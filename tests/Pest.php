@@ -8,12 +8,17 @@ use Tests\TestCase;
 uses(TestCase::class)
     ->beforeEach(function () {
         $this->configHome = sys_get_temp_dir().'/glimpse-cli-test-'.bin2hex(random_bytes(6));
+        $this->originalCwd = (string) getcwd();
 
         putenv('XDG_CONFIG_HOME='.$this->configHome);
         putenv('GLIMPSE_TOKEN');
         putenv('GLIMPSE_API_URL');
     })
     ->afterEach(function () {
+        if ($this->originalCwd !== '') {
+            chdir($this->originalCwd);
+        }
+
         if ($this->configHome !== '' && is_dir($this->configHome)) {
             File::deleteDirectory($this->configHome);
         }
@@ -48,6 +53,23 @@ function createImage(string $name = 'photo.png', ?string $contents = null): stri
     file_put_contents($path, $contents ?? Images::png());
 
     return $path;
+}
+
+/**
+ * Make the test workspace the current working directory, creating it if
+ * needed. The baseline is anchored on the CWD, so baseline tests run from
+ * the workspace the way a user runs glimpse from their project root. The
+ * suite's afterEach restores the original CWD.
+ */
+function chdirWorkspace(?string $directory = null): void
+{
+    $directory ??= workspace();
+
+    if (! is_dir($directory)) {
+        mkdir($directory, 0755, true);
+    }
+
+    chdir($directory);
 }
 
 /**

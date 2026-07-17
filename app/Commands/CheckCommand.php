@@ -31,7 +31,7 @@ class CheckCommand extends GlimpseCommand
             $skipped = 0;
 
             if (is_dir($input)) {
-                $root = $this->baselineRootFor($input);
+                $root = BaselineFile::root();
                 [$files, $skipped] = $this->partitionByBaseline(BaselineFile::load($root), $root, $input, $files);
             }
 
