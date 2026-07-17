@@ -244,20 +244,32 @@ Generate it by scanning the directory:
 glimpse analyze assets/ --update-baseline
 ```
 
-The file lists each image with its size and content hash:
+The file lists each image with its size, content hash, and the operation that put it there, under a composer.lock-style `_readme` header that explains the format to anyone reading it in review:
 
 ```json
 {
+    "_readme": [
+        "Images already handled by glimpse: check and analyze skip a file while its size and xxh128 content hash still match its entry.",
+        "..."
+    ],
     "files": {
         "photos/hero.png": {
             "size": 482133,
-            "xxh128": "5f3d0a9c1b2e4d6f8a7c9e0b1d2f3a4c"
+            "xxh128": "5f3d0a9c1b2e4d6f8a7c9e0b1d2f3a4c",
+            "via": "analyze"
+        },
+        "photos/hero.webp": {
+            "size": 98342,
+            "xxh128": "9a1c3e5f7b2d4a6c8e0f1a3b5c7d9e0f",
+            "via": "optimize"
         }
     }
 }
 ```
 
 An image is skipped only while its content still matches the recorded entry. Replace a baselined file with a new version and it re-enters the scan automatically. Where `.glimpseignore` says "never look at these paths", the baseline says "these exact file contents are already handled".
+
+The `via` field separates accepted debt from finished work: `analyze` means the file was taken as-is by `--update-baseline`, a command name (`convert`, `resize`, `thumbnail`) means glimpse produced or processed it, and `optimize` means the optimizer chain ran, whether through the `optimize` command or a transform's `--optimize` flag. When you burn down a bulk-adopted baseline later, the `analyze` entries are the ones still waiting for real treatment.
 
 Every command reads the baseline (and `.glimpseignore`) from the current working directory, the way composer and phpstan resolve their config: run glimpse from the project root and the baseline there governs the run, with entries keyed relative to it (scanning `assets/` matches keys like `assets/hero.png`). There is no upward search; run glimpse from anywhere else and the baseline simply does not apply. `--update-baseline` writes the baseline to the current directory and requires the scanned directory to be inside it.
 

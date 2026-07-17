@@ -348,7 +348,7 @@ test('--update-baseline keeps valid entries without re-analyzing and prunes dele
 
     writeBaseline([
         'covered.png' => baselineEntry($covered),
-        'deleted.png' => ['size' => 1, 'xxh128' => 'gone'],
+        'deleted.png' => ['size' => 1, 'xxh128' => 'gone', 'via' => 'analyze'],
     ]);
 
     $exitCode = Artisan::call('analyze', ['input' => workspace(), '--update-baseline' => true]);
@@ -445,7 +445,7 @@ test('--update-baseline requires the scan to be inside the current working direc
 test('--update-baseline still prunes on an all-failed run but suppresses the success line', function () {
     chdirWorkspace();
     createImage('bad.png', 'not an image');
-    writeBaseline(['gone.png' => ['size' => 1, 'xxh128' => 'stale']]);
+    writeBaseline(['gone.png' => ['size' => 1, 'xxh128' => 'stale', 'via' => 'analyze']]);
 
     $exitCode = Artisan::call('analyze', ['input' => workspace(), '--update-baseline' => true]);
 
@@ -458,7 +458,7 @@ test('--update-baseline still prunes on an all-failed run but suppresses the suc
 
 test('--update-baseline prunes deleted files even when no images remain', function () {
     chdirWorkspace();
-    writeBaseline(['gone.png' => ['size' => 1, 'xxh128' => 'stale']]);
+    writeBaseline(['gone.png' => ['size' => 1, 'xxh128' => 'stale', 'via' => 'analyze']]);
 
     $exitCode = Artisan::call('analyze', ['input' => workspace(), '--update-baseline' => true]);
 

@@ -74,10 +74,10 @@ function chdirWorkspace(?string $directory = null): void
 
 /**
  * Write a .glimpse-baseline.json into the directory (the test workspace by
- * default). Entries map relative paths to size/xxh128 pairs; build
+ * default). Entries map relative paths to size/xxh128/via records; build
  * current-content entries with baselineEntry().
  *
- * @param  array<string, array{size: int, xxh128: string}>  $files
+ * @param  array<string, array{size: int, xxh128: string, via: string}>  $files
  */
 function writeBaseline(array $files, ?string $directory = null): void
 {
@@ -89,25 +89,29 @@ function writeBaseline(array $files, ?string $directory = null): void
 
     file_put_contents(
         $directory.'/'.BaselineFile::FILENAME,
-        json_encode(['files' => $files === [] ? new stdClass : $files], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES).PHP_EOL,
+        json_encode([
+            '_readme' => BaselineFile::README,
+            'files' => $files === [] ? new stdClass : $files,
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES).PHP_EOL,
     );
 }
 
 /**
- * The baseline entry matching a file's current content.
+ * The baseline entry matching a file's current content, recorded by the
+ * given command.
  *
- * @return array{size: int, xxh128: string}
+ * @return array{size: int, xxh128: string, via: string}
  */
-function baselineEntry(string $path): array
+function baselineEntry(string $path, string $via = 'analyze'): array
 {
-    return ['size' => (int) filesize($path), 'xxh128' => (string) hash_file('xxh128', $path)];
+    return ['size' => (int) filesize($path), 'xxh128' => (string) hash_file('xxh128', $path), 'via' => $via];
 }
 
 /**
  * Decode the .glimpse-baseline.json in the directory (the test workspace by
  * default).
  *
- * @return array{files: array<string, array{size: int, xxh128: string}>}
+ * @return array{files: array<string, array{size: int, xxh128: string, via: string}>}
  */
 function readBaseline(?string $directory = null): array
 {

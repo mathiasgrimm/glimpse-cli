@@ -56,7 +56,7 @@ trait UpdatesBaseline
             $relative = Paths::relativePath($root, $output);
 
             if (! $ignore->ignores($relative)) {
-                $baseline->record($relative, $output);
+                $baseline->record($relative, $output, $this->baselineVia());
             }
 
             if ($recordSource && $input !== '-') {
@@ -96,6 +96,22 @@ trait UpdatesBaseline
             return;
         }
 
-        is_file($source) ? $baseline->record($relative, $source) : $baseline->forget($relative);
+        is_file($source) ? $baseline->record($relative, $source, $this->baselineVia()) : $baseline->forget($relative);
+    }
+
+    /**
+     * What the entry records as its via: 'optimize' when the optimizer
+     * chain ran, whether as the optimize command itself or through a
+     * transform's --optimize flag, since an optimized result is the
+     * ultimate goal the baseline tracks. Otherwise the command's own
+     * name.
+     */
+    private function baselineVia(): string
+    {
+        if ($this->hasOption('optimize') && (bool) $this->option('optimize')) {
+            return 'optimize';
+        }
+
+        return (string) $this->getName();
     }
 }

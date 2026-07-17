@@ -92,7 +92,7 @@ test('records only the output in an existing baseline', function () {
         ->assertExitCode(0);
 
     expect(readBaseline()['files'])->toBe([
-        'photo.resized.jpg' => baselineEntry(dirname($input).'/photo.resized.jpg'),
+        'photo.resized.jpg' => baselineEntry(dirname($input).'/photo.resized.jpg', 'resize'),
     ]);
 });
 

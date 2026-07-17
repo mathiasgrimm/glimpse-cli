@@ -47,8 +47,8 @@ test('records the source and output in an existing baseline', function () {
         ->assertExitCode(0);
 
     expect(readBaseline()['files'])->toBe([
-        'photo.optimized.jpg' => baselineEntry(dirname($input).'/photo.optimized.jpg'),
-        'photo.png' => baselineEntry($input),
+        'photo.optimized.jpg' => baselineEntry(dirname($input).'/photo.optimized.jpg', 'optimize'),
+        'photo.png' => baselineEntry($input, 'optimize'),
     ]);
 });
 
@@ -63,7 +63,7 @@ test('--in-place records the overwritten input with its new content', function (
         ->assertExitCode(0);
 
     expect(readBaseline()['files'])->toBe([
-        'photo.png' => baselineEntry($input),
+        'photo.png' => baselineEntry($input, 'optimize'),
     ]);
 });
 

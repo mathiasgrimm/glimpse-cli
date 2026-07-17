@@ -270,8 +270,24 @@ test('records the source and output in an existing baseline', function () {
         ->assertExitCode(0);
 
     expect(readBaseline()['files'])->toBe([
-        'photo.png' => baselineEntry($input),
-        'photo.webp' => baselineEntry(dirname($input).'/photo.webp'),
+        'photo.png' => baselineEntry($input, 'convert'),
+        'photo.webp' => baselineEntry(dirname($input).'/photo.webp', 'convert'),
+    ]);
+});
+
+test('--optimize records the entries as via optimize', function () {
+    chdirWorkspace();
+    Http::fake(['*/v1/convert' => Http::response(fakeTransformResponse('webp', 'image/webp'))]);
+
+    $input = createImage('photo.png');
+    writeBaseline([]);
+
+    $this->artisan('convert', ['input' => $input, '--format' => 'webp', '--optimize' => true])
+        ->assertExitCode(0);
+
+    expect(readBaseline()['files'])->toBe([
+        'photo.png' => baselineEntry($input, 'optimize'),
+        'photo.webp' => baselineEntry(dirname($input).'/photo.webp', 'optimize'),
     ]);
 });
 
@@ -325,7 +341,7 @@ test('--in-place with an extension change records only the output', function () 
         ->assertExitCode(0);
 
     expect(readBaseline()['files'])->toBe([
-        'photo.webp' => baselineEntry(dirname($input).'/photo.webp'),
+        'photo.webp' => baselineEntry(dirname($input).'/photo.webp', 'convert'),
     ]);
 });
 
@@ -353,7 +369,7 @@ test('--in-place with an extension change drops the stale source entry', functio
         ->assertExitCode(0);
 
     expect(readBaseline()['files'])->toBe([
-        'photo.webp' => baselineEntry(dirname($input).'/photo.webp'),
+        'photo.webp' => baselineEntry(dirname($input).'/photo.webp', 'convert'),
     ]);
 });
 
@@ -369,7 +385,7 @@ test('a source excluded by .glimpseignore is not recorded in the baseline', func
         ->assertExitCode(0);
 
     expect(readBaseline()['files'])->toBe([
-        'photo.webp' => baselineEntry(dirname($input).'/photo.webp'),
+        'photo.webp' => baselineEntry(dirname($input).'/photo.webp', 'convert'),
     ]);
 });
 
@@ -385,7 +401,7 @@ test('an output excluded by .glimpseignore is not recorded in the baseline', fun
         ->assertExitCode(0);
 
     expect(readBaseline()['files'])->toBe([
-        'photo.png' => baselineEntry($input),
+        'photo.png' => baselineEntry($input, 'convert'),
     ]);
 });
 

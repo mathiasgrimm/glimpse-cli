@@ -54,7 +54,7 @@ test('record adds a new entry and refreshes a stale one', function () {
     $path = createImage('photo.png');
 
     $baseline = BaselineFile::load(workspace());
-    $baseline->record('photo.png', $path);
+    $baseline->record('photo.png', $path, 'analyze');
 
     expect($baseline->count())->toBe(1)
         ->and($baseline->skips('photo.png', $path))->toBeTrue();
@@ -63,7 +63,7 @@ test('record adds a new entry and refreshes a stale one', function () {
 
     expect($baseline->skips('photo.png', $path))->toBeFalse();
 
-    $baseline->record('photo.png', $path);
+    $baseline->record('photo.png', $path, 'analyze');
 
     expect($baseline->count())->toBe(1)
         ->and($baseline->skips('photo.png', $path))->toBeTrue();
@@ -74,8 +74,8 @@ test('prune drops entries for deleted files and keeps live ones', function () {
     $gone = createImage('gone.png');
 
     $baseline = BaselineFile::load(workspace());
-    $baseline->record('kept.png', $kept);
-    $baseline->record('gone.png', $gone);
+    $baseline->record('kept.png', $kept, 'analyze');
+    $baseline->record('gone.png', $gone, 'analyze');
 
     unlink($gone);
     $baseline->prune(workspace());
@@ -89,44 +89,39 @@ test('save writes pretty json with sorted keys and a trailing newline', function
     $a = createImage('a.png');
 
     $baseline = BaselineFile::load(workspace());
-    $baseline->record('b.png', $b);
-    $baseline->record('a.png', $a);
+    $baseline->record('b.png', $b, 'analyze');
+    $baseline->record('a.png', $a, 'convert');
     $baseline->save(workspace());
 
-    $size = filesize($a);
-    $hash = hash_file('xxh128', $a);
-
-    $expected = <<<JSON
-    {
-        "files": {
-            "a.png": {
-                "size": {$size},
-                "xxh128": "{$hash}"
-            },
-            "b.png": {
-                "size": {$size},
-                "xxh128": "{$hash}"
-            }
-        }
-    }
-    JSON;
+    $expected = json_encode([
+        '_readme' => BaselineFile::README,
+        'files' => [
+            'a.png' => baselineEntry($a, 'convert'),
+            'b.png' => baselineEntry($b, 'analyze'),
+        ],
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 
     expect(file_get_contents(workspace().'/'.BaselineFile::FILENAME))->toBe($expected.PHP_EOL);
 });
 
-test('an empty baseline saves as an empty files object', function () {
+test('an empty baseline saves as an empty files object under the readme header', function () {
     mkdir(workspace(), 0755, true);
 
     BaselineFile::load(workspace())->save(workspace());
 
-    expect(file_get_contents(workspace().'/'.BaselineFile::FILENAME))->toBe('{'.PHP_EOL.'    "files": {}'.PHP_EOL.'}'.PHP_EOL);
+    $expected = json_encode([
+        '_readme' => BaselineFile::README,
+        'files' => new stdClass,
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+
+    expect(file_get_contents(workspace().'/'.BaselineFile::FILENAME))->toBe($expected.PHP_EOL);
 });
 
 test('a saved baseline loads back with the same matching', function () {
     $path = createImage('photos/a.png');
 
     $baseline = BaselineFile::load(workspace());
-    $baseline->record('photos/a.png', $path);
+    $baseline->record('photos/a.png', $path, 'analyze');
     $baseline->save(workspace());
 
     expect(BaselineFile::load(workspace())->skips('photos/a.png', $path))->toBeTrue();
@@ -149,8 +144,8 @@ test('save fails loudly instead of writing garbage for a non-utf8 filename', fun
     $path = createImage('photo.png');
 
     $baseline = BaselineFile::load(workspace());
-    $baseline->record('photo.png', $path);
-    $baseline->put("caf\xE9.png", 1, 'abc');
+    $baseline->record('photo.png', $path, 'analyze');
+    $baseline->put("caf\xE9.png", 1, 'abc', 'analyze');
 
     expect(fn () => $baseline->save(workspace()))->toThrow(ApiException::class, 'Could not encode')
         ->and(file_exists(workspace().'/'.BaselineFile::FILENAME))->toBeFalse();
@@ -160,7 +155,7 @@ test('save fails loudly when the directory is not writable', function () {
     $path = createImage('photo.png');
 
     $baseline = BaselineFile::load(workspace());
-    $baseline->record('photo.png', $path);
+    $baseline->record('photo.png', $path, 'analyze');
 
     chmod(workspace(), 0555);
 
@@ -195,7 +190,7 @@ test('loading for update takes the lock first and holds it until save releases i
 
     expect(flock($other, LOCK_EX | LOCK_NB))->toBeFalse();
 
-    $baseline->record('photo.png', createImage('photo.png'));
+    $baseline->record('photo.png', createImage('photo.png'), 'analyze');
     $baseline->save(workspace());
 
     expect(flock($other, LOCK_EX | LOCK_NB))->toBeTrue()
@@ -223,7 +218,7 @@ test('save fails fast when creating a baseline someone else holds locked', funct
     mkdir(workspace(), 0755, true);
 
     $baseline = BaselineFile::load(workspace());
-    $baseline->put('a.png', 1, 'abc');
+    $baseline->put('a.png', 1, 'abc', 'analyze');
 
     file_put_contents(workspace().'/'.BaselineFile::FILENAME, '');
     $other = fopen(workspace().'/'.BaselineFile::FILENAME, 'r+');
@@ -243,7 +238,7 @@ test('record skips a file that vanished instead of crashing', function () {
     unlink($path);
 
     $baseline = BaselineFile::load(workspace());
-    $baseline->record('photo.png', $path);
+    $baseline->record('photo.png', $path, 'analyze');
 
     expect($baseline->count())->toBe(0);
 });
@@ -252,7 +247,7 @@ test('put stores a precomputed entry and forget removes one', function () {
     $path = createImage('photo.png');
 
     $baseline = BaselineFile::load(workspace());
-    $baseline->put('photo.png', (int) filesize($path), (string) hash_file('xxh128', $path));
+    $baseline->put('photo.png', (int) filesize($path), (string) hash_file('xxh128', $path), 'analyze');
 
     expect($baseline->skips('photo.png', $path))->toBeTrue();
 
@@ -271,6 +266,7 @@ test('load fails loudly on a malformed baseline', function (string $content) {
     'invalid json' => '{nope',
     'not an object' => '[1, 2]',
     'missing files key' => '{"paths": {}}',
-    'entry missing xxh128' => '{"files": {"a.png": {"size": 70}}}',
-    'entry with non-integer size' => '{"files": {"a.png": {"size": "70", "xxh128": "abc"}}}',
+    'entry missing xxh128' => '{"files": {"a.png": {"size": 70, "via": "analyze"}}}',
+    'entry missing via' => '{"files": {"a.png": {"size": 70, "xxh128": "abc"}}}',
+    'entry with non-integer size' => '{"files": {"a.png": {"size": "70", "xxh128": "abc", "via": "analyze"}}}',
 ]);

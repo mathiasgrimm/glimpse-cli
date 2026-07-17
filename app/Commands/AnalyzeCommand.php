@@ -182,8 +182,8 @@ class AnalyzeCommand extends GlimpseCommand
             // record() fallback re-reading the disk is defensive and only
             // runs if that invariant ever breaks.
             $entry === null
-                ? $baseline->record($prefix.$file, rtrim($root, '/').'/'.$prefix.$file)
-                : $baseline->put($prefix.$file, $entry['size'], $entry['xxh128']);
+                ? $baseline->record($prefix.$file, rtrim($root, '/').'/'.$prefix.$file, (string) $this->getName())
+                : $baseline->put($prefix.$file, $entry['size'], $entry['xxh128'], (string) $this->getName());
         }
 
         $baseline->prune($root);

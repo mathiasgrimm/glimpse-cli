@@ -53,7 +53,7 @@ test('records only the output in an existing baseline', function () {
         ->assertExitCode(0);
 
     expect(readBaseline()['files'])->toBe([
-        'photo.thumb.jpg' => baselineEntry(dirname($input).'/photo.thumb.jpg'),
+        'photo.thumb.jpg' => baselineEntry(dirname($input).'/photo.thumb.jpg', 'thumbnail'),
     ]);
 });
 
