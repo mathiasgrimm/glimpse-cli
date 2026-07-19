@@ -14,17 +14,6 @@
             "email": "mathiasgrimm@gmail.com"
         }
     ],
-    "repositories": [
-        {
-            "type": "path",
-            "url": "../glimpse-php",
-            "options": {
-                "versions": {
-                    "mathiasgrimm/glimpse-php": "2.0.0"
-                }
-            }
-        }
-    ],
     "require": {
         "php": "^8.2",
         "mathiasgrimm/glimpse-php": "^2.0",

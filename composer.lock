@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "1006e900a61d1069b6ef407e115fd92f",
+    "content-hash": "7f2b0cbeb3dca0d01e805ebec5d39662",
     "packages": [
         {
             "name": "brick/math",
@@ -2591,11 +2591,17 @@
         },
         {
             "name": "mathiasgrimm/glimpse-php",
-            "version": "2.0.0",
+            "version": "v2.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/mathiasgrimm/glimpse-php.git",
+                "reference": "1bd18313f3a001152eb7cad168e22537f4c9dbe8"
+            },
             "dist": {
-                "type": "path",
-                "url": "../glimpse-php",
-                "reference": "f84be835b0dbe9d7085fda0291399beb2a72187d"
+                "type": "zip",
+                "url": "https://api.github.com/repos/mathiasgrimm/glimpse-php/zipball/1bd18313f3a001152eb7cad168e22537f4c9dbe8",
+                "reference": "1bd18313f3a001152eb7cad168e22537f4c9dbe8",
+                "shasum": ""
             },
             "require": {
                 "guzzlehttp/guzzle": "^7.8",
@@ -2617,30 +2623,7 @@
                     "GlimpseImg\\": "src/"
                 }
             },
-            "autoload-dev": {
-                "psr-4": {
-                    "GlimpseImg\\Tests\\": "tests/"
-                }
-            },
-            "scripts": {
-                "lint": [
-                    "pint --parallel"
-                ],
-                "lint:check": [
-                    "pint --parallel --test"
-                ],
-                "types:check": [
-                    "phpstan analyse"
-                ],
-                "test": [
-                    "@lint:check",
-                    "@types:check",
-                    "@php vendor/bin/pest"
-                ],
-                "ci:check": [
-                    "@test"
-                ]
-            },
+            "notification-url": "https://packagist.org/downloads/",
             "license": [
                 "MIT"
             ],
@@ -2652,6 +2635,7 @@
             ],
             "description": "PHP SDK for glimpseimg.com: convert, optimize, resize, thumbnail, inspect, and analyze images.",
             "keywords": [
+                "Webp",
                 "api",
                 "avif",
                 "convert",
@@ -2664,16 +2648,13 @@
                 "png",
                 "resize",
                 "sdk",
-                "thumbnail",
-                "webp"
+                "thumbnail"
             ],
             "support": {
                 "issues": "https://github.com/mathiasgrimm/glimpse-php/issues",
                 "source": "https://github.com/mathiasgrimm/glimpse-php"
             },
-            "transport-options": {
-                "relative": true
-            }
+            "time": "2026-07-19T01:21:39+00:00"
         },
         {
             "name": "nesbot/carbon",
