@@ -36,6 +36,12 @@ That's a real session: `banner.png` is a frame of the banner at the top of this 
   <img src="art/terminal.avif" alt="glimpse analyze and convert running in a terminal" width="100%">
 </p>
 
+Run `glimpse` with no arguments to see everything it can do:
+
+<p align="center">
+  <img src="art/cli-banner.avif" alt="the glimpse banner and command list printed when running glimpse without arguments" width="100%">
+</p>
+
 ## Documentation
 
 The full documentation lives at **[glimpseimg.com/docs/cli](https://glimpseimg.com/docs/cli)**:
