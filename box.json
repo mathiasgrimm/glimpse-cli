@@ -1,15 +1,39 @@
 {
     "chmod": "0755",
-    "directories": [
-        "app",
-        "bootstrap",
-        "config",
-        "vendor"
+    "finder": [
+        {
+            "in": ["app", "bootstrap", "config"]
+        },
+        {
+            "in": ["vendor"],
+            "exclude": [
+                "brianium",
+                "doctrine/deprecations",
+                "fidry",
+                "hamcrest",
+                "jean85",
+                "laravel/pint",
+                "mockery",
+                "myclabs",
+                "nikic",
+                "pestphp",
+                "phar-io",
+                "phpdocumentor",
+                "phpstan",
+                "phpunit",
+                "sebastian",
+                "staabm",
+                "ta-tikoma",
+                "theseer",
+                "webmozart"
+            ]
+        }
     ],
     "files": [
         "composer.json"
     ],
     "exclude-composer-files": false,
+    "exclude-dev-files": false,
     "compression": "GZ",
     "compactors": [
         "KevinGH\\Box\\Compactor\\Php",
