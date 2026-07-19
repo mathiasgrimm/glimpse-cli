@@ -61,6 +61,11 @@ class InitCommand extends Command
      * when the template changes. The glimpseimg.com repo runs a
      * docs-drift workflow that compares the two and fails on mismatch.
      *
+     * The install goes through Composer so every CI run is counted as a
+     * Packagist install. The package declares no runtime dependencies
+     * (the bin is the committed phar), so the install only downloads the
+     * package itself; no cache step is worth the extra YAML.
+     *
      * The check step is guarded on the token (mapped into the job env,
      * because the secrets context is not available in step-level if
      * expressions): fork pull requests never receive repository
@@ -88,9 +93,8 @@ class InitCommand extends Command
               - uses: actions/checkout@v6
               - name: Install glimpse
                 run: |
-                  curl -fsSL -o "$RUNNER_TEMP/glimpse" https://github.com/mathiasgrimm/glimpse-cli/releases/latest/download/glimpse
-                  chmod +x "$RUNNER_TEMP/glimpse"
-                  echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+                  composer global require --no-interaction --no-progress mathiasgrimm/glimpse-cli
+                  composer global config bin-dir --absolute --quiet >> "$GITHUB_PATH"
               - name: Check images
                 if: env.GLIMPSE_TOKEN != ''
                 run: glimpse check .
