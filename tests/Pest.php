@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\File;
+use MathiasGrimm\GlimpseCli\Glimpse\Config;
 use MathiasGrimm\GlimpseCli\Support\BaselineFile;
 use MathiasGrimm\GlimpseCli\Support\Sleeper;
 use Tests\Fixtures\Images;
@@ -14,6 +15,11 @@ uses(TestCase::class)
         putenv('XDG_CONFIG_HOME='.$this->configHome);
         putenv('GLIMPSE_TOKEN');
         putenv('GLIMPSE_API_URL');
+
+        // A real public token is baked into Config for releases. Tests
+        // must not silently fall back to it: run with the fallback off,
+        // and let tests that exercise it bind their own override.
+        $this->app->instance(Config::class, new Config(publicTokenOverride: ''));
     })
     ->afterEach(function () {
         if ($this->originalCwd !== '') {

@@ -14,7 +14,7 @@ final class Config
      * process fills it in before tagging, and an empty value keeps the
      * fallback off.
      */
-    private const PUBLIC_TOKEN = '';
+    private const PUBLIC_TOKEN = '4|wbQrxtzJP89PXWn5Mku5fRUjBGLTnbB9javJhN9m5d9cb13f';
 
     private readonly string $publicToken;
 
