@@ -1,11 +1,11 @@
 <?php
 
-namespace App\Commands;
+namespace MathiasGrimm\GlimpseCli\Commands;
 
-use App\Commands\Concerns\GuardsApiErrors;
-use App\Glimpse\Config;
-use GlimpseImg\Client;
 use LaravelZero\Framework\Commands\Command;
+use MathiasGrimm\GlimpseCli\Commands\Concerns\GuardsApiErrors;
+use MathiasGrimm\GlimpseCli\Glimpse\Config;
+use MathiasGrimm\GlimpsePhp\Client;
 
 class AuthStatusCommand extends Command
 {
@@ -25,6 +25,13 @@ class AuthStatusCommand extends Command
             if ($token === null) {
                 $this->line('Token:   (none)');
                 $this->error('Not authenticated. Run: glimpse auth');
+
+                return self::FAILURE;
+            }
+
+            if ($config->usingPublicToken()) {
+                $this->line('Token:   (built-in public CI token)');
+                $this->error('Not authenticated. The public token only runs check and analyze. Run: glimpse auth');
 
                 return self::FAILURE;
             }

@@ -1,15 +1,15 @@
 <?php
 
-namespace App\Commands;
+namespace MathiasGrimm\GlimpseCli\Commands;
 
-use App\Commands\Concerns\AnalyzesImages;
-use App\Support\BaselineFile;
-use App\Support\ImageFinder;
-use App\Support\Paths;
-use GlimpseImg\ApiException;
-use GlimpseImg\Client;
-use GlimpseImg\SampleProbe;
 use Illuminate\Support\Str;
+use MathiasGrimm\GlimpseCli\Commands\Concerns\AnalyzesImages;
+use MathiasGrimm\GlimpseCli\Support\BaselineFile;
+use MathiasGrimm\GlimpseCli\Support\ImageFinder;
+use MathiasGrimm\GlimpseCli\Support\Paths;
+use MathiasGrimm\GlimpsePhp\ApiException;
+use MathiasGrimm\GlimpsePhp\Client;
+use MathiasGrimm\GlimpsePhp\SampleProbe;
 
 class CheckCommand extends GlimpseCommand
 {
@@ -52,13 +52,18 @@ class CheckCommand extends GlimpseCommand
 
             $rows = [];
 
-            foreach ($files as $path) {
-                $rows[] = $this->analyzeFile($client, $probe, $dir, $path, target: null, quality: null);
-                $bar?->advance();
-            }
+            try {
+                foreach ($files as $path) {
+                    $rows[] = $this->analyzeFile($client, $probe, $dir, $path, target: null, quality: null);
+                    $bar?->advance();
+                }
 
-            $bar?->finish();
-            $bar?->clear();
+                $bar?->finish();
+            } finally {
+                // An aborting exception (auth, rate limit, forbidden) must
+                // not leave a half-rendered bar under the error output.
+                $bar?->clear();
+            }
 
             if ($bar !== null) {
                 $this->newLine();

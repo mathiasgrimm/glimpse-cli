@@ -1,9 +1,9 @@
 <?php
 
-namespace App\Commands;
+namespace MathiasGrimm\GlimpseCli\Commands;
 
-use GlimpseImg\Client;
-use GlimpseImg\ImageInfo;
+use MathiasGrimm\GlimpsePhp\Client;
+use MathiasGrimm\GlimpsePhp\ImageInfo;
 
 class InfoCommand extends GlimpseCommand
 {
@@ -16,6 +16,8 @@ class InfoCommand extends GlimpseCommand
     public function handle(Client $client): int
     {
         return $this->runGuarded(function () use ($client) {
+            $this->rejectPublicToken();
+
             $info = $client->info($this->readImage($this->inputArgument()));
 
             if ($this->option('json')) {

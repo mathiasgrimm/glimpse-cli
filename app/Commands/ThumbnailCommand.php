@@ -1,9 +1,9 @@
 <?php
 
-namespace App\Commands;
+namespace MathiasGrimm\GlimpseCli\Commands;
 
-use App\Commands\Concerns\UpdatesBaseline;
-use GlimpseImg\Client;
+use MathiasGrimm\GlimpseCli\Commands\Concerns\UpdatesBaseline;
+use MathiasGrimm\GlimpsePhp\Client;
 
 class ThumbnailCommand extends GlimpseCommand
 {
@@ -24,6 +24,8 @@ class ThumbnailCommand extends GlimpseCommand
     public function handle(Client $client): int
     {
         return $this->runGuarded(function () use ($client) {
+            $this->rejectPublicToken();
+
             $input = $this->inputArgument();
             $output = $this->resolveOutput($input);
 

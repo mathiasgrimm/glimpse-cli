@@ -1,9 +1,9 @@
 <?php
 
-namespace App\Commands;
+namespace MathiasGrimm\GlimpseCli\Commands;
 
-use GlimpseImg\Client;
-use GlimpseImg\UsageSummary;
+use MathiasGrimm\GlimpsePhp\Client;
+use MathiasGrimm\GlimpsePhp\UsageSummary;
 
 class UsageCommand extends GlimpseCommand
 {
@@ -15,6 +15,8 @@ class UsageCommand extends GlimpseCommand
     public function handle(Client $client): int
     {
         return $this->runGuarded(function () use ($client) {
+            $this->rejectPublicToken();
+
             $usage = $client->usage();
 
             if ($this->option('json')) {
