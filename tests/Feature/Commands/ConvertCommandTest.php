@@ -271,6 +271,17 @@ test('omits the psnr from the JSON output when the API reports null', function (
         ->and(json_decode(Artisan::output(), true))->not->toHaveKey('psnr');
 });
 
+test('leaves PSNR out of the human summary when the API reports null', function () {
+    fakeTransform('convert', 'webp', ['psnr' => null]);
+
+    $input = createImage('photo.png');
+    $expectedOutput = dirname($input).'/photo.webp';
+
+    $this->artisan('convert', ['input' => $input, '--format' => 'webp'])
+        ->expectsOutput("Wrote {$expectedOutput} (image/webp, ".strlen(Images::jpg()).' B, 1280x720)')
+        ->assertExitCode(0);
+});
+
 test('appends the psnr to the human summary when the API reports one', function () {
     fakeTransform('convert', 'webp', ['psnr' => 41.27]);
 

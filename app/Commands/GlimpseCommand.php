@@ -179,7 +179,7 @@ abstract class GlimpseCommand extends Command
             $this->humanSize($result->size),
             $result->width,
             $result->height,
-            $result->psnr === null ? '' : sprintf(', PSNR %.2f dB', $result->psnr),
+            $result->psnr === null ? '' : sprintf(', PSNR %.2F dB', $result->psnr), // %.2F is locale-independent; %.2f would print a comma under some locales
         );
 
         $path === '-' ? fwrite(STDERR, $summary.PHP_EOL) : $this->info($summary);
