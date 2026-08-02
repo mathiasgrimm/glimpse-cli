@@ -7,6 +7,12 @@ use MathiasGrimm\GlimpseCli\Support\BaselineFile;
 use MathiasGrimm\GlimpseCli\Support\IgnoreFile;
 use Symfony\Component\Process\Process;
 
+// Raw Artisan::call('init') runs must pass --no-interaction. Interactivity
+// follows the suite's stdin, so on a TTY the seed and workflow confirms
+// would block waiting for an answer, with the prompt invisible inside the
+// captured output. Tests that answer a prompt use $this->artisan() with
+// expectsConfirmation() instead.
+
 const INIT_SEED_QUESTION = 'Scan the current directory and record every image into the baseline now (runs analyze . --update-baseline)?';
 
 const INIT_WORKFLOW_QUESTION = 'Add a GitHub Actions workflow that runs glimpse check on pull requests and pushes to main (.github/workflows/glimpse.yml)?';
@@ -44,7 +50,7 @@ test('scaffolds the starter ignore file and an empty baseline with zero prerequi
     chdirWorkspace();
     Http::fake();
 
-    expect(Artisan::call('init'))->toBe(0);
+    expect(Artisan::call('init', ['--no-interaction' => true]))->toBe(0);
 
     $output = Artisan::output();
 
@@ -101,7 +107,7 @@ test('--update-baseline seeds without prompting', function () {
     putenv('GLIMPSE_TOKEN=test-token');
     Http::fake(['*/v1/analyze' => Http::response(fakeAnalyzeResponse())]);
 
-    expect(Artisan::call('init', ['--update-baseline' => true]))->toBe(0)
+    expect(Artisan::call('init', ['--update-baseline' => true, '--no-interaction' => true]))->toBe(0)
         ->and(baselineFiles())->toBe(['photo.png' => baselineEntry(workspace().'/photo.png')]);
 });
 
@@ -112,7 +118,7 @@ test('the ignore file is written before the seed scan, so the template already a
     putenv('GLIMPSE_TOKEN=test-token');
     Http::fake(['*/v1/analyze' => Http::response(fakeAnalyzeResponse())]);
 
-    expect(Artisan::call('init', ['--update-baseline' => true]))->toBe(0)
+    expect(Artisan::call('init', ['--update-baseline' => true, '--no-interaction' => true]))->toBe(0)
         ->and(baselineFiles())->toBe(['photo.png' => baselineEntry(workspace().'/photo.png')]);
 
     Http::assertSentCount(1);
@@ -121,7 +127,7 @@ test('the ignore file is written before the seed scan, so the template already a
 test('re-running on a configured project keeps both files and exits 0', function () {
     chdirWorkspace();
     Http::fake();
-    Artisan::call('init');
+    Artisan::call('init', ['--no-interaction' => true]);
 
     $ignoreBefore = (string) file_get_contents(ignorePath());
     $baselineBefore = (string) file_get_contents(baselinePath());
@@ -142,7 +148,7 @@ test('creates only the missing file when the other already exists', function () 
     Http::fake();
     file_put_contents(ignorePath(), "custom-pattern/\n");
 
-    expect(Artisan::call('init'))->toBe(0)
+    expect(Artisan::call('init', ['--no-interaction' => true]))->toBe(0)
         ->and((string) file_get_contents(ignorePath()))->toBe("custom-pattern/\n")
         ->and(baselineFiles())->toBe([]);
 
@@ -156,7 +162,7 @@ test('--force recreates the ignore file from the template and leaves a populated
     $entry = baselineEntry(createImage('photo.png'));
     writeBaseline(['photo.png' => $entry]);
 
-    expect(Artisan::call('init', ['--force' => true]))->toBe(0)
+    expect(Artisan::call('init', ['--force' => true, '--no-interaction' => true]))->toBe(0)
         ->and(Artisan::output())->toContain('Recreated '.IgnoreFile::FILENAME.' from the starter template.');
 
     $ignore = (string) file_get_contents(ignorePath());
@@ -189,7 +195,7 @@ test('a failed seed still scaffolds an empty baseline and exits 1 with a retry h
     putenv('GLIMPSE_TOKEN=test-token');
     Http::fake(['*/v1/analyze' => Http::response(['message' => 'Unauthenticated.'], 401)]);
 
-    expect(Artisan::call('init', ['--update-baseline' => true]))->toBe(1);
+    expect(Artisan::call('init', ['--update-baseline' => true, '--no-interaction' => true]))->toBe(1);
 
     $output = Artisan::output();
 
@@ -205,7 +211,7 @@ test('a partially failed seed passes analyze exit 0 through and drops the seed h
     putenv('GLIMPSE_TOKEN=test-token');
     Http::fake(['*/v1/analyze' => Http::response(fakeAnalyzeResponse())]);
 
-    expect(Artisan::call('init', ['--update-baseline' => true]))->toBe(0);
+    expect(Artisan::call('init', ['--update-baseline' => true, '--no-interaction' => true]))->toBe(0);
 
     $output = Artisan::output();
 
@@ -220,12 +226,12 @@ test('the seed-hint state does not leak between runs in the same process', funct
     putenv('GLIMPSE_TOKEN=test-token');
     Http::fake(['*/v1/analyze' => Http::response(fakeAnalyzeResponse())]);
 
-    Artisan::call('init', ['--update-baseline' => true]);
+    Artisan::call('init', ['--update-baseline' => true, '--no-interaction' => true]);
     Artisan::output();
 
     chdirWorkspace(workspace().'/fresh');
 
-    expect(Artisan::call('init'))->toBe(0)
+    expect(Artisan::call('init', ['--no-interaction' => true]))->toBe(0)
         ->and(Artisan::output())->toContain('Accept the current images as already handled');
 });
 
@@ -233,7 +239,7 @@ test('next steps include the seed hint on a scaffold-only run', function () {
     chdirWorkspace();
     Http::fake();
 
-    Artisan::call('init');
+    Artisan::call('init', ['--no-interaction' => true]);
     $output = Artisan::output();
 
     expect($output)->toContain('Next steps:')
@@ -248,7 +254,7 @@ test('next steps drop the seed hint when the baseline was seeded', function () {
     putenv('GLIMPSE_TOKEN=test-token');
     Http::fake(['*/v1/analyze' => Http::response(fakeAnalyzeResponse())]);
 
-    Artisan::call('init', ['--update-baseline' => true]);
+    Artisan::call('init', ['--update-baseline' => true, '--no-interaction' => true]);
     $output = Artisan::output();
 
     expect($output)->toContain('Next steps:')
@@ -317,7 +323,7 @@ describe('workflow scaffolding', function () {
         mkdir(workspace().'/.git');
         Http::fake();
 
-        expect(Artisan::call('init'))->toBe(0)
+        expect(Artisan::call('init', ['--no-interaction' => true]))->toBe(0)
             ->and(is_file(workflowPath()))->toBeFalse()
             ->and(Artisan::output())->toContain('Gate new images in CI: glimpse check .');
     });
@@ -326,7 +332,7 @@ describe('workflow scaffolding', function () {
         chdirWorkspace();
         Http::fake();
 
-        expect(Artisan::call('init', ['--workflow' => true]))->toBe(0);
+        expect(Artisan::call('init', ['--workflow' => true, '--no-interaction' => true]))->toBe(0);
 
         $output = Artisan::output();
 
@@ -359,7 +365,7 @@ describe('workflow scaffolding', function () {
         $content = writeWorkflow();
         Http::fake();
 
-        expect(Artisan::call('init', ['--workflow' => true]))->toBe(0)
+        expect(Artisan::call('init', ['--workflow' => true, '--no-interaction' => true]))->toBe(0)
             ->and(Artisan::output())->toContain('already exists, kept (use --workflow --force to recreate it).')
             ->and((string) file_get_contents(workflowPath()))->toBe($content);
     });
@@ -369,7 +375,7 @@ describe('workflow scaffolding', function () {
         writeWorkflow();
         Http::fake();
 
-        expect(Artisan::call('init', ['--workflow' => true, '--force' => true]))->toBe(0)
+        expect(Artisan::call('init', ['--workflow' => true, '--force' => true, '--no-interaction' => true]))->toBe(0)
             ->and(Artisan::output())->toContain('Recreated '.InitCommand::WORKFLOW_PATH.' from the starter template.')
             ->and((string) file_get_contents(workflowPath()))->toBe(InitCommand::WORKFLOW_TEMPLATE);
     });
@@ -379,7 +385,7 @@ describe('workflow scaffolding', function () {
         $content = writeWorkflow();
         Http::fake();
 
-        expect(Artisan::call('init', ['--force' => true]))->toBe(0)
+        expect(Artisan::call('init', ['--force' => true, '--no-interaction' => true]))->toBe(0)
             ->and((string) file_get_contents(workflowPath()))->toBe($content);
     });
 
@@ -389,7 +395,7 @@ describe('workflow scaffolding', function () {
         putenv('GLIMPSE_TOKEN=test-token');
         Http::fake(['*/v1/analyze' => Http::response(['message' => 'Unauthenticated.'], 401)]);
 
-        expect(Artisan::call('init', ['--update-baseline' => true, '--workflow' => true]))->toBe(1)
+        expect(Artisan::call('init', ['--update-baseline' => true, '--workflow' => true, '--no-interaction' => true]))->toBe(1)
             ->and((string) file_get_contents(workflowPath()))->toBe(InitCommand::WORKFLOW_TEMPLATE);
     });
 
@@ -398,7 +404,7 @@ describe('workflow scaffolding', function () {
         file_put_contents(workspace().'/.github', 'not a directory');
         Http::fake();
 
-        expect(Artisan::call('init', ['--workflow' => true]))->toBe(1)
+        expect(Artisan::call('init', ['--workflow' => true, '--no-interaction' => true]))->toBe(1)
             ->and(Artisan::output())->toContain('Could not create the directory')
             ->and(is_file(workflowPath()))->toBeFalse();
     });
@@ -410,7 +416,7 @@ describe('workflow scaffolding', function () {
         symlink(workspace().'/target.yml', workflowPath());
         Http::fake();
 
-        expect(Artisan::call('init', ['--workflow' => true, '--force' => true]))->toBe(1)
+        expect(Artisan::call('init', ['--workflow' => true, '--force' => true, '--no-interaction' => true]))->toBe(1)
             ->and(Artisan::output())->toContain('is a symbolic link')
             ->and((string) file_get_contents(workspace().'/target.yml'))->toBe("original\n");
     });
@@ -419,7 +425,7 @@ describe('workflow scaffolding', function () {
         chdirWorkspace();
         Http::fake();
 
-        Artisan::call('init', ['--workflow' => true]);
+        Artisan::call('init', ['--workflow' => true, '--no-interaction' => true]);
         Artisan::output();
 
         // The written state must not leak into a project whose workflow
@@ -428,7 +434,7 @@ describe('workflow scaffolding', function () {
         writeWorkflow(directory: $kept);
         chdirWorkspace($kept);
 
-        Artisan::call('init');
+        Artisan::call('init', ['--no-interaction' => true]);
         $output = Artisan::output();
 
         expect($output)->toContain('Review '.InitCommand::WORKFLOW_PATH)
@@ -436,7 +442,7 @@ describe('workflow scaffolding', function () {
 
         chdirWorkspace(workspace().'/fresh');
 
-        Artisan::call('init');
+        Artisan::call('init', ['--no-interaction' => true]);
         $output = Artisan::output();
 
         expect($output)->toContain('Gate new images in CI')
@@ -476,7 +482,7 @@ describe('workflow scaffolding', function () {
         file_put_contents(workspace().'/.github/workflows', 'not a directory');
         Http::fake();
 
-        expect(Artisan::call('init', ['--workflow' => true]))->toBe(1)
+        expect(Artisan::call('init', ['--workflow' => true, '--no-interaction' => true]))->toBe(1)
             ->and(Artisan::output())->toContain('Could not create the directory')
             ->and((string) file_get_contents(workspace().'/.github/workflows'))->toBe('not a directory');
     });
@@ -488,7 +494,7 @@ describe('workflow scaffolding', function () {
         symlink(workspace().'/elsewhere', workspace().'/.github/workflows');
         Http::fake();
 
-        expect(Artisan::call('init', ['--workflow' => true]))->toBe(1)
+        expect(Artisan::call('init', ['--workflow' => true, '--no-interaction' => true]))->toBe(1)
             ->and(Artisan::output())->toContain('is a symbolic link')
             ->and(glob(workspace().'/elsewhere/*'))->toBe([]);
     });
@@ -518,7 +524,7 @@ describe('empty baseline warning', function () {
 
         // Artisan::call cannot answer the seed confirm, so it falls through
         // to No: the exact shape of every scripted `init --workflow` run.
-        expect(Artisan::call('init', ['--workflow' => true]))->toBe(0)
+        expect(Artisan::call('init', ['--workflow' => true, '--no-interaction' => true]))->toBe(0)
             ->and(Artisan::output())->toContain(INIT_EMPTY_BASELINE_WARNING);
 
         Http::assertNothingSent();
@@ -529,7 +535,7 @@ describe('empty baseline warning', function () {
         writeWorkflow();
         Http::fake();
 
-        expect(Artisan::call('init'))->toBe(0)
+        expect(Artisan::call('init', ['--no-interaction' => true]))->toBe(0)
             ->and(Artisan::output())->toContain(INIT_EMPTY_BASELINE_WARNING);
     });
 
@@ -539,7 +545,7 @@ describe('empty baseline warning', function () {
         putenv('GLIMPSE_TOKEN=test-token');
         Http::fake(['*/v1/analyze' => Http::response(fakeAnalyzeResponse())]);
 
-        expect(Artisan::call('init', ['--workflow' => true, '--update-baseline' => true]))->toBe(0)
+        expect(Artisan::call('init', ['--workflow' => true, '--update-baseline' => true, '--no-interaction' => true]))->toBe(0)
             ->and(Artisan::output())->not->toContain('first CI run will re-check');
     });
 
@@ -548,7 +554,7 @@ describe('empty baseline warning', function () {
         createImage('photo.png');
         Http::fake();
 
-        expect(Artisan::call('init'))->toBe(0)
+        expect(Artisan::call('init', ['--no-interaction' => true]))->toBe(0)
             ->and(Artisan::output())->not->toContain('first CI run will re-check');
     });
 
@@ -560,8 +566,8 @@ describe('empty baseline warning', function () {
         // First scripted run scaffolds the empty baseline, the second adds
         // the workflow: the trap state is reached across two runs, so the
         // warning must key on the file content, not on what this run did.
-        expect(Artisan::call('init'))->toBe(0)
-            ->and(Artisan::call('init', ['--workflow' => true]))->toBe(0)
+        expect(Artisan::call('init', ['--no-interaction' => true]))->toBe(0)
+            ->and(Artisan::call('init', ['--workflow' => true, '--no-interaction' => true]))->toBe(0)
             ->and(Artisan::output())->toContain(INIT_EMPTY_BASELINE_WARNING);
     });
 
@@ -571,7 +577,7 @@ describe('empty baseline warning', function () {
         writeBaseline(['photo.png' => $entry]);
         Http::fake();
 
-        expect(Artisan::call('init', ['--workflow' => true]))->toBe(0)
+        expect(Artisan::call('init', ['--workflow' => true, '--no-interaction' => true]))->toBe(0)
             ->and(Artisan::output())->not->toContain('first CI run will re-check');
     });
 
@@ -581,7 +587,7 @@ describe('empty baseline warning', function () {
         putenv('GLIMPSE_TOKEN=test-token');
         Http::fake(['*/v1/analyze' => Http::response(['message' => 'Unauthenticated.'], 401)]);
 
-        expect(Artisan::call('init', ['--update-baseline' => true, '--workflow' => true]))->toBe(1)
+        expect(Artisan::call('init', ['--update-baseline' => true, '--workflow' => true, '--no-interaction' => true]))->toBe(1)
             ->and(Artisan::output())->toContain(INIT_EMPTY_BASELINE_WARNING);
     });
 
@@ -598,7 +604,7 @@ describe('empty baseline warning', function () {
 
         // The refresh fails but the populated baseline on disk is intact,
         // so CI behaves exactly as before the run: no warning.
-        expect(Artisan::call('init', ['--update-baseline' => true, '--workflow' => true]))->toBe(1)
+        expect(Artisan::call('init', ['--update-baseline' => true, '--workflow' => true, '--no-interaction' => true]))->toBe(1)
             ->and(Artisan::output())->not->toContain('The baseline is empty');
     });
 });
