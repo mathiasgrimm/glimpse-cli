@@ -134,7 +134,7 @@ class InitCommand extends Command
                 env:
                   COMPOSER_HOME: ${{ runner.temp }}/glimpse-composer
                 run: |
-                  composer global require --no-interaction --no-progress --no-plugins --no-scripts mathiasgrimm/glimpse-cli:1.4.0
+                  composer global require --no-interaction --no-progress --no-plugins --no-scripts mathiasgrimm/glimpse-cli
                   composer global config bin-dir --absolute --quiet >> "$GITHUB_PATH"
 
               - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
