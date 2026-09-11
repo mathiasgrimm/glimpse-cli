@@ -126,7 +126,7 @@ class InitCommand extends Command
         jobs:
           optimize-images:
             if: github.event.pull_request.merged == true
-            runs-on: ubuntu-24.04
+            runs-on: ubuntu-latest
             timeout-minutes: 30
             steps:
               - name: Install glimpse
