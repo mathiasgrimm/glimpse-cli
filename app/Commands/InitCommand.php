@@ -8,6 +8,7 @@ use MathiasGrimm\GlimpseCli\Support\BaselineFile;
 use MathiasGrimm\GlimpseCli\Support\IgnoreFile;
 use MathiasGrimm\GlimpseCli\Support\Paths;
 use MathiasGrimm\GlimpseCli\Support\ScaffoldFile;
+use MathiasGrimm\GlimpsePhp\ApiException;
 
 class InitCommand extends Command
 {
@@ -15,8 +16,9 @@ class InitCommand extends Command
 
     protected $signature = 'init
         {--update-baseline : Seed the baseline by scanning the current directory (runs analyze . --update-baseline)}
-        {--workflow : Add a GitHub Actions workflow that runs glimpse check, without prompting}
-        {--force : Recreate .glimpseignore from its template even when it exists; add --workflow to also recreate the workflow file}';
+        {--workflow : Add the check and optimize GitHub Actions workflow without prompting}
+        {--workflow-mode= : Workflow to add without prompting: check or optimize (default)}
+        {--force : Recreate .glimpseignore from its template even when it exists; select a workflow with --workflow or --workflow-mode to also recreate it}';
 
     protected $description = 'Set up the current directory for glimpse: a starter .glimpseignore, the baseline, and optionally a CI workflow';
 
@@ -104,11 +106,73 @@ class InitCommand extends Command
         YAML;
 
     /**
+     * Complete post-merge workflow, also published in the automatic optimization docs.
+     */
+    public const OPTIMIZE_TEMPLATE = <<<'YAML'
+        name: Glimpse automatic optimization
+
+        on:
+          pull_request_target:
+            types: [closed]
+
+        permissions:
+          contents: write
+          pull-requests: write
+
+        concurrency:
+          group: glimpse-optimize-${{ github.event.pull_request.base.ref }}
+          cancel-in-progress: false
+
+        jobs:
+          optimize-images:
+            if: github.event.pull_request.merged == true
+            runs-on: ubuntu-latest
+            timeout-minutes: 30
+            steps:
+              - name: Install glimpse
+                working-directory: ${{ runner.temp }}
+                env:
+                  COMPOSER_HOME: ${{ runner.temp }}/glimpse-composer
+                run: |
+                  composer global require --no-interaction --no-progress --no-plugins --no-scripts mathiasgrimm/glimpse-cli
+                  composer global config bin-dir --absolute --quiet >> "$GITHUB_PATH"
+
+              - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+                with:
+                  ref: refs/heads/${{ github.event.pull_request.base.ref }}
+                  persist-credentials: false
+
+              - name: Check and optimize reported images
+                shell: bash
+                env:
+                  GLIMPSE_TOKEN: ${{ secrets.GLIMPSE_TOKEN }}
+                run: |
+                  # Check exits 1 for both reported images and checking errors.
+                  glimpse check . --json > "$RUNNER_TEMP/glimpse-check.json" || test "$?" -eq 1
+                  jq -e '.failed == []' "$RUNNER_TEMP/glimpse-check.json" > /dev/null
+                  jq -j '.files[] | .file, "\u0000"' "$RUNNER_TEMP/glimpse-check.json" |
+                    while IFS= read -r -d '' file; do
+                      glimpse optimize "./$file" --quality=85 --output="./$file" --force
+                    done
+
+              - name: Open or update the optimization PR
+                uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
+                with:
+                  token: ${{ secrets.GITHUB_TOKEN }}
+                  base: ${{ github.event.pull_request.base.ref }}
+                  branch: automation/glimpse-${{ github.event.pull_request.base.ref }}
+                  title: Optimize images
+                  commit-message: Optimize images
+                  body: Optimize images reported by glimpse check, keeping their formats and filenames.
+                  delete-branch: true
+        YAML;
+
+    /**
      * Whether this run wrote the workflow file (created or recreated),
      * and whether it found and kept an existing one. Together with
      * "neither" they pick the next-steps variant.
      */
-    private bool $workflowWritten = false;
+    private ?string $workflowWritten = null;
 
     private bool $workflowKept = false;
 
@@ -117,9 +181,10 @@ class InitCommand extends Command
         return $this->runGuarded(function () {
             // The console application reuses the resolved command instance,
             // so the flags must not carry over from an earlier in-process run.
-            $this->workflowWritten = false;
+            $this->workflowWritten = null;
             $this->workflowKept = false;
 
+            $mode = $this->requestedWorkflowMode();
             $root = Paths::root();
 
             // Order is load-bearing: the ignore file must exist before any
@@ -129,7 +194,7 @@ class InitCommand extends Command
 
             $exitCode = $this->setUpBaseline($root);
 
-            $this->setUpWorkflow($root);
+            $this->setUpWorkflow($root, $mode);
 
             // The empty-baseline warning and the seed hint key on what is
             // actually on disk after the run, not on what this run did: a
@@ -168,14 +233,8 @@ class InitCommand extends Command
      * the empty baseline with zero API calls. Piped input that carries an
      * answer is read as that answer.
      *
-     * The dangerous shape is an empty baseline COMBINED with the workflow:
-     * the CI gate then re-checks every image already in the repository and
-     * fails on any above the check threshold. That combination happens on
-     * every scripted `init --workflow` run, because the seed confirm
-     * silently falls through to No, so printNextSteps() warns loudly when
-     * the run ends in that state. Emptiness is read from the file on disk,
-     * not from what this run did: a kept baseline may itself be empty, and
-     * a failed refresh leaves a populated baseline intact.
+     * Seeding accepts existing bytes rather than optimizing them. Keep the
+     * prompt explicit because both workflow modes skip matching entries.
      */
     private function setUpBaseline(string $root): int
     {
@@ -185,7 +244,7 @@ class InitCommand extends Command
         $seed = (bool) $this->option('update-baseline');
 
         if (! $seed && ! $exists) {
-            $seed = $this->confirm('Scan the current directory and record every image into the baseline now (runs analyze . --update-baseline)?', false);
+            $seed = $this->confirm('Accept current images unchanged? Check and automatic optimization will skip them until they change (runs analyze . --update-baseline).', false);
         }
 
         if ($seed) {
@@ -228,46 +287,63 @@ class InitCommand extends Command
     }
 
     /**
-     * Scaffold the GitHub Actions workflow. Opt-in like the seed scan:
-     * the --workflow flag selects it outright; a plain run only offers
-     * it (a confirm defaulting to No) when the file is missing and the
-     * root is a git repository, so non-interactive runs never write it
-     * and non-repos are never asked. An existing file is always kept
-     * unless --workflow --force replaces it; --force alone never
-     * touches it, because --workflow selects the step and --force is
-     * only the overwrite modifier.
+     * Validate before scaffolding or seeding. An explicit mode also requests
+     * the workflow, and overrides the default implied by --workflow.
      */
-    private function setUpWorkflow(string $root): void
+    private function requestedWorkflowMode(): ?string
+    {
+        $mode = $this->option('workflow-mode');
+
+        if (($mode !== null || $this->input->hasParameterOption('--workflow-mode', true))
+            && ! in_array($mode, ['check', 'optimize'], true)) {
+            throw new ApiException('--workflow-mode must be check or optimize.');
+        }
+
+        return $mode ?? ($this->option('workflow') ? 'optimize' : null);
+    }
+
+    private function setUpWorkflow(string $root, ?string $mode): void
     {
         $path = $root.'/'.self::WORKFLOW_PATH;
-        $selected = (bool) $this->option('workflow');
+        $exists = is_file($path);
 
-        if (is_file($path)) {
-            if ($selected && $this->option('force')) {
-                ScaffoldFile::write($root, self::WORKFLOW_PATH, self::WORKFLOW_TEMPLATE, replace: true);
-                $this->info('Recreated '.self::WORKFLOW_PATH.' from the starter template.');
-                $this->workflowWritten = true;
-
-                return;
-            }
-
-            $this->line(self::WORKFLOW_PATH.' already exists, kept (use --workflow --force to recreate it).');
+        if ($exists && ($mode === null || ! $this->option('force'))) {
+            $this->line(self::WORKFLOW_PATH.' already exists, kept (use --workflow-mode=check or --workflow-mode=optimize with --force to replace it).');
             $this->workflowKept = true;
 
             return;
         }
 
-        if (! $selected && $this->isGitRoot($root)) {
-            $selected = $this->confirm('Add a GitHub Actions workflow that runs glimpse check on pull requests and pushes to main ('.self::WORKFLOW_PATH.')?', false);
+        if ($mode === null && $this->isGitRoot($root) && $this->input->isInteractive()) {
+            $this->line('Check and optimize: after a PR merges, open an optimization PR. Requires a private GLIMPSE_TOKEN.');
+            $this->line('Check only: check pull requests and pushes to main. The token is optional.');
+            $choice = $this->choice('Which GitHub Actions workflow would you like?', [
+                'Check and optimize',
+                'Check only',
+                'No workflow',
+            ], 0);
+
+            // Symfony makes input non-interactive when it reaches EOF and
+            // returns the default answer. EOF must not opt into automation.
+            if ($this->input->isInteractive()) {
+                $mode = match ($choice) {
+                    'Check and optimize' => 'optimize',
+                    'Check only' => 'check',
+                    default => null,
+                };
+            }
         }
 
-        if (! $selected) {
+        if ($mode === null) {
             return;
         }
 
-        ScaffoldFile::write($root, self::WORKFLOW_PATH, self::WORKFLOW_TEMPLATE);
-        $this->info('Created '.self::WORKFLOW_PATH.'.');
-        $this->workflowWritten = true;
+        $template = $mode === 'check' ? self::WORKFLOW_TEMPLATE : self::OPTIMIZE_TEMPLATE;
+        ScaffoldFile::write($root, self::WORKFLOW_PATH, $template, replace: $exists);
+        $this->info($exists
+            ? 'Recreated '.self::WORKFLOW_PATH.' from the starter template.'
+            : 'Created '.self::WORKFLOW_PATH.'.');
+        $this->workflowWritten = $mode;
     }
 
     /**
@@ -281,25 +357,34 @@ class InitCommand extends Command
 
     private function printNextSteps(bool $baselineEmpty): void
     {
-        if ($baselineEmpty && ($this->workflowWritten || $this->workflowKept)) {
+        if ($baselineEmpty && $this->workflowWritten !== null) {
             $this->newLine();
-            $this->warn('The baseline is empty but the workflow gates images, so the first CI run will re-check every image in the repository and fail on any that would benefit from optimization. Seed the baseline before pushing: glimpse analyze . --update-baseline');
+            $this->warn($this->workflowWritten === 'check'
+                ? 'The baseline is empty. The check-only workflow will fail on images above the threshold.'
+                : 'The baseline is empty. After the next PR merges, automatic optimization will process all images reported by check and open a PR.');
         }
 
         $steps = ['Review '.IgnoreFile::FILENAME.' and tune the patterns for your project.'];
 
         if ($baselineEmpty) {
-            $steps[] = 'Accept the current images as already handled: glimpse analyze . --update-baseline';
+            $steps[] = 'To accept current images unchanged and skip them until they change: glimpse analyze . --update-baseline';
         }
 
-        if ($this->workflowWritten) {
-            $steps[] = 'Optional: set the GLIMPSE_TOKEN secret for higher rate limits and usage attribution: gh secret set GLIMPSE_TOKEN';
+        if ($this->workflowWritten !== null) {
+            $steps[] = $this->workflowWritten === 'check'
+                ? 'Optional: set the GLIMPSE_TOKEN secret for higher rate limits and usage attribution: gh secret set GLIMPSE_TOKEN'
+                : 'Required: set a private GLIMPSE_TOKEN secret for optimization: gh secret set GLIMPSE_TOKEN';
+
+            if ($this->workflowWritten === 'optimize') {
+                $steps[] = 'Install the workflow on your default branch and allow GitHub Actions to create pull requests. Generated PR checks require approval.';
+                $steps[] = 'Optimization uses quality 85, keeps formats and filenames, and may remove metadata. See https://glimpseimg.com/docs/cli/automatic-optimization';
+            }
             $steps[] = 'Commit '.IgnoreFile::FILENAME.', '.BaselineFile::FILENAME.', and '.self::WORKFLOW_PATH.'.';
         } else {
             $steps[] = 'Commit '.IgnoreFile::FILENAME.' and '.BaselineFile::FILENAME.'.';
 
             $steps[] = $this->workflowKept
-                ? 'Review '.self::WORKFLOW_PATH.'; the GLIMPSE_TOKEN secret is optional but gives higher rate limits: gh secret set GLIMPSE_TOKEN'
+                ? 'Review '.self::WORKFLOW_PATH.'; a private GLIMPSE_TOKEN is required for optimization and optional for check only.'
                 : 'Gate new images in CI: glimpse check .  (see https://glimpseimg.com/docs/cli/continuous-integration)';
         }
 

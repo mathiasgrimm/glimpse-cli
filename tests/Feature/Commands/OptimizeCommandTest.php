@@ -71,3 +71,22 @@ test('rejects a non-numeric quality before any HTTP request', function () {
 
     Http::assertNothingSent();
 });
+
+test('explicit same-path output keeps noncanonical filenames and updates the baseline', function (string $filename) {
+    chdirWorkspace();
+    fakeTransform('optimize', 'jpg');
+    $input = createImage($filename, Images::jpg().'padding');
+    writeBaseline();
+
+    $this->artisan('optimize', [
+        'input' => './'.$filename,
+        '--output' => './'.$filename,
+        '--quality' => '85',
+        '--force' => true,
+    ])->assertExitCode(0);
+
+    expect(scandir(workspace()))->toContain($filename)
+        ->and(file_get_contents($input))->toBe(Images::jpg())
+        ->and(baselineFiles())->toBe([$filename => baselineEntry($input, 'optimize')]);
+    Http::assertSent(fn (Request $request): bool => $request['quality'] === 85);
+})->with(['photo.jpeg', 'PHOTO.JPG', '-leading.jpeg']);

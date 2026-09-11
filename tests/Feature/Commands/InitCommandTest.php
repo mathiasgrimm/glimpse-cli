@@ -13,11 +13,13 @@ use Symfony\Component\Process\Process;
 // captured output. Tests that answer a prompt use $this->artisan() with
 // expectsConfirmation() instead.
 
-const INIT_SEED_QUESTION = 'Scan the current directory and record every image into the baseline now (runs analyze . --update-baseline)?';
+const INIT_SEED_QUESTION = 'Accept current images unchanged? Check and automatic optimization will skip them until they change (runs analyze . --update-baseline).';
 
-const INIT_WORKFLOW_QUESTION = 'Add a GitHub Actions workflow that runs glimpse check on pull requests and pushes to main (.github/workflows/glimpse.yml)?';
+const INIT_WORKFLOW_QUESTION = 'Which GitHub Actions workflow would you like?';
 
-const INIT_EMPTY_BASELINE_WARNING = 'The baseline is empty but the workflow gates images, so the first CI run will re-check every image in the repository and fail on any that would benefit from optimization. Seed the baseline before pushing: glimpse analyze . --update-baseline';
+const INIT_WORKFLOW_CHOICES = ['Check and optimize', 'Check only', 'No workflow'];
+
+const INIT_EMPTY_BASELINE_WARNING = 'The baseline is empty. After the next PR merges, automatic optimization will process all images reported by check and open a PR.';
 
 function ignorePath(): string
 {
@@ -216,7 +218,7 @@ test('a partially failed seed passes analyze exit 0 through and drops the seed h
     $output = Artisan::output();
 
     expect($output)->toContain('skipped: Unrecognized image format.')
-        ->and($output)->not->toContain('Accept the current images as already handled')
+        ->and($output)->not->toContain('To accept current images unchanged and skip them until they change')
         ->and(baselineFiles())->toBe(['photo.png' => baselineEntry(workspace().'/photo.png')]);
 });
 
@@ -232,7 +234,7 @@ test('the seed-hint state does not leak between runs in the same process', funct
     chdirWorkspace(workspace().'/fresh');
 
     expect(Artisan::call('init', ['--no-interaction' => true]))->toBe(0)
-        ->and(Artisan::output())->toContain('Accept the current images as already handled');
+        ->and(Artisan::output())->toContain('To accept current images unchanged and skip them until they change');
 });
 
 test('next steps include the seed hint on a scaffold-only run', function () {
@@ -243,7 +245,7 @@ test('next steps include the seed hint on a scaffold-only run', function () {
     $output = Artisan::output();
 
     expect($output)->toContain('Next steps:')
-        ->and($output)->toContain('Accept the current images as already handled: glimpse analyze . --update-baseline')
+        ->and($output)->toContain('To accept current images unchanged and skip them until they change: glimpse analyze . --update-baseline')
         ->and($output)->toContain('Commit '.IgnoreFile::FILENAME.' and '.BaselineFile::FILENAME.'.')
         ->and($output)->toContain('glimpse check .');
 });
@@ -258,7 +260,7 @@ test('next steps drop the seed hint when the baseline was seeded', function () {
     $output = Artisan::output();
 
     expect($output)->toContain('Next steps:')
-        ->and($output)->not->toContain('Accept the current images as already handled');
+        ->and($output)->not->toContain('To accept current images unchanged and skip them until they change');
 });
 
 describe('workflow scaffolding', function () {
@@ -269,11 +271,11 @@ describe('workflow scaffolding', function () {
 
         $this->artisan('init')
             ->expectsConfirmation(INIT_SEED_QUESTION)
-            ->expectsConfirmation(INIT_WORKFLOW_QUESTION, 'yes')
+            ->expectsChoice(INIT_WORKFLOW_QUESTION, 'Check and optimize', INIT_WORKFLOW_CHOICES)
             ->expectsOutputToContain('Created '.InitCommand::WORKFLOW_PATH.'.')
             ->assertExitCode(0);
 
-        expect((string) file_get_contents(workflowPath()))->toBe(InitCommand::WORKFLOW_TEMPLATE);
+        expect((string) file_get_contents(workflowPath()))->toBe(InitCommand::OPTIMIZE_TEMPLATE);
 
         Http::assertNothingSent();
     });
@@ -285,7 +287,7 @@ describe('workflow scaffolding', function () {
 
         $this->artisan('init')
             ->expectsConfirmation(INIT_SEED_QUESTION)
-            ->expectsConfirmation(INIT_WORKFLOW_QUESTION)
+            ->expectsChoice(INIT_WORKFLOW_QUESTION, 'No workflow', INIT_WORKFLOW_CHOICES)
             ->expectsOutputToContain('Gate new images in CI: glimpse check .')
             ->assertExitCode(0);
 
@@ -312,10 +314,10 @@ describe('workflow scaffolding', function () {
 
         $this->artisan('init')
             ->expectsConfirmation(INIT_SEED_QUESTION)
-            ->expectsConfirmation(INIT_WORKFLOW_QUESTION, 'yes')
+            ->expectsChoice(INIT_WORKFLOW_QUESTION, 'Check and optimize', INIT_WORKFLOW_CHOICES)
             ->assertExitCode(0);
 
-        expect((string) file_get_contents(workflowPath()))->toBe(InitCommand::WORKFLOW_TEMPLATE);
+        expect((string) file_get_contents(workflowPath()))->toBe(InitCommand::OPTIMIZE_TEMPLATE);
     });
 
     test('non-interactive runs fall through to the default and never write the workflow', function () {
@@ -337,10 +339,10 @@ describe('workflow scaffolding', function () {
         $output = Artisan::output();
 
         expect($output)->toContain('Created '.InitCommand::WORKFLOW_PATH.'.')
-            ->and($output)->toContain('Optional: set the GLIMPSE_TOKEN secret for higher rate limits and usage attribution: gh secret set GLIMPSE_TOKEN')
+            ->and($output)->toContain('Required: set a private GLIMPSE_TOKEN secret for optimization: gh secret set GLIMPSE_TOKEN')
             ->and($output)->toContain('Commit '.IgnoreFile::FILENAME.', '.BaselineFile::FILENAME.', and '.InitCommand::WORKFLOW_PATH.'.')
             ->and($output)->not->toContain('Gate new images in CI')
-            ->and((string) file_get_contents(workflowPath()))->toBe(InitCommand::WORKFLOW_TEMPLATE);
+            ->and((string) file_get_contents(workflowPath()))->toBe(InitCommand::OPTIMIZE_TEMPLATE);
     });
 
     test('an existing workflow is kept byte for byte, without a prompt', function () {
@@ -353,8 +355,8 @@ describe('workflow scaffolding', function () {
         // short-circuit the prompt even in a git repository.
         $this->artisan('init')
             ->expectsConfirmation(INIT_SEED_QUESTION)
-            ->expectsOutputToContain(InitCommand::WORKFLOW_PATH.' already exists, kept (use --workflow --force to recreate it).')
-            ->expectsOutputToContain('Review '.InitCommand::WORKFLOW_PATH.'; the GLIMPSE_TOKEN secret is optional but gives higher rate limits: gh secret set GLIMPSE_TOKEN')
+            ->expectsOutputToContain(InitCommand::WORKFLOW_PATH.' already exists, kept (use --workflow-mode=check or --workflow-mode=optimize with --force to replace it).')
+            ->expectsOutputToContain('Review '.InitCommand::WORKFLOW_PATH.'; a private GLIMPSE_TOKEN is required for optimization and optional for check only.')
             ->assertExitCode(0);
 
         expect((string) file_get_contents(workflowPath()))->toBe($content);
@@ -366,7 +368,7 @@ describe('workflow scaffolding', function () {
         Http::fake();
 
         expect(Artisan::call('init', ['--workflow' => true, '--no-interaction' => true]))->toBe(0)
-            ->and(Artisan::output())->toContain('already exists, kept (use --workflow --force to recreate it).')
+            ->and(Artisan::output())->toContain('already exists, kept (use --workflow-mode=check or --workflow-mode=optimize with --force to replace it).')
             ->and((string) file_get_contents(workflowPath()))->toBe($content);
     });
 
@@ -377,7 +379,7 @@ describe('workflow scaffolding', function () {
 
         expect(Artisan::call('init', ['--workflow' => true, '--force' => true, '--no-interaction' => true]))->toBe(0)
             ->and(Artisan::output())->toContain('Recreated '.InitCommand::WORKFLOW_PATH.' from the starter template.')
-            ->and((string) file_get_contents(workflowPath()))->toBe(InitCommand::WORKFLOW_TEMPLATE);
+            ->and((string) file_get_contents(workflowPath()))->toBe(InitCommand::OPTIMIZE_TEMPLATE);
     });
 
     test('--force alone never touches an existing workflow', function () {
@@ -396,7 +398,7 @@ describe('workflow scaffolding', function () {
         Http::fake(['*/v1/analyze' => Http::response(['message' => 'Unauthenticated.'], 401)]);
 
         expect(Artisan::call('init', ['--update-baseline' => true, '--workflow' => true, '--no-interaction' => true]))->toBe(1)
-            ->and((string) file_get_contents(workflowPath()))->toBe(InitCommand::WORKFLOW_TEMPLATE);
+            ->and((string) file_get_contents(workflowPath()))->toBe(InitCommand::OPTIMIZE_TEMPLATE);
     });
 
     test('a .github regular file fails the run cleanly', function () {
@@ -459,7 +461,7 @@ describe('workflow scaffolding', function () {
             ->expectsConfirmation(INIT_SEED_QUESTION, 'yes')
             ->assertExitCode(0);
 
-        expect((string) file_get_contents(workflowPath()))->toBe(InitCommand::WORKFLOW_TEMPLATE)
+        expect((string) file_get_contents(workflowPath()))->toBe(InitCommand::OPTIMIZE_TEMPLATE)
             ->and(baselineFiles())->toBe(['photo.png' => baselineEntry(workspace().'/photo.png')]);
     });
 
@@ -470,7 +472,7 @@ describe('workflow scaffolding', function () {
 
         $this->artisan('init', ['--force' => true])
             ->expectsConfirmation(INIT_SEED_QUESTION)
-            ->expectsConfirmation(INIT_WORKFLOW_QUESTION)
+            ->expectsChoice(INIT_WORKFLOW_QUESTION, 'No workflow', INIT_WORKFLOW_CHOICES)
             ->assertExitCode(0);
 
         expect(is_file(workflowPath()))->toBeFalse();
@@ -504,13 +506,13 @@ describe('workflow scaffolding', function () {
         mkdir(workspace().'/.git');
 
         // A real subprocess with real stdin: "no" answers the seed
-        // question (so no API call is attempted), "yes" the workflow one.
+        // question (so no API call is attempted), "0" chooses automatic optimization.
         $process = new Process([PHP_BINARY, base_path('glimpse'), 'init'], workspace());
-        $process->setInput("no\nyes\n");
+        $process->setInput("no\n0\n");
         $process->run();
 
         expect($process->getExitCode())->toBe(0)
-            ->and((string) file_get_contents(workflowPath()))->toBe(InitCommand::WORKFLOW_TEMPLATE)
+            ->and((string) file_get_contents(workflowPath()))->toBe(InitCommand::OPTIMIZE_TEMPLATE)
             ->and(baselineFiles())->toBe([]);
     });
 
@@ -530,13 +532,14 @@ describe('empty baseline warning', function () {
         Http::assertNothingSent();
     });
 
-    test('a kept existing workflow with an empty baseline also warns', function () {
+    test('a kept existing workflow receives mode-neutral guidance', function () {
         chdirWorkspace();
         writeWorkflow();
         Http::fake();
 
         expect(Artisan::call('init', ['--no-interaction' => true]))->toBe(0)
-            ->and(Artisan::output())->toContain(INIT_EMPTY_BASELINE_WARNING);
+            ->and(Artisan::output())->toContain('a private GLIMPSE_TOKEN is required for optimization and optional for check only.')
+            ->and(Artisan::output())->not->toContain(INIT_EMPTY_BASELINE_WARNING);
     });
 
     test('no warning when the baseline is seeded in the same run', function () {
@@ -546,7 +549,7 @@ describe('empty baseline warning', function () {
         Http::fake(['*/v1/analyze' => Http::response(fakeAnalyzeResponse())]);
 
         expect(Artisan::call('init', ['--workflow' => true, '--update-baseline' => true, '--no-interaction' => true]))->toBe(0)
-            ->and(Artisan::output())->not->toContain('first CI run will re-check');
+            ->and(Artisan::output())->not->toContain('The baseline is empty.');
     });
 
     test('no warning when no workflow is involved', function () {
@@ -555,7 +558,7 @@ describe('empty baseline warning', function () {
         Http::fake();
 
         expect(Artisan::call('init', ['--no-interaction' => true]))->toBe(0)
-            ->and(Artisan::output())->not->toContain('first CI run will re-check');
+            ->and(Artisan::output())->not->toContain('The baseline is empty.');
     });
 
     test('a baseline kept from an earlier run that is still empty also warns', function () {
@@ -578,7 +581,7 @@ describe('empty baseline warning', function () {
         Http::fake();
 
         expect(Artisan::call('init', ['--workflow' => true, '--no-interaction' => true]))->toBe(0)
-            ->and(Artisan::output())->not->toContain('first CI run will re-check');
+            ->and(Artisan::output())->not->toContain('The baseline is empty.');
     });
 
     test('a failed seed with a workflow still warns and keeps the failure exit code', function () {
@@ -607,4 +610,95 @@ describe('empty baseline warning', function () {
         expect(Artisan::call('init', ['--update-baseline' => true, '--workflow' => true, '--no-interaction' => true]))->toBe(1)
             ->and(Artisan::output())->not->toContain('The baseline is empty');
     });
+});
+
+describe('workflow modes', function () {
+    test('explicit modes select the template and override the workflow default', function (string $mode, bool $workflow, bool $force) {
+        chdirWorkspace();
+        Http::fake();
+        if ($force) {
+            writeWorkflow();
+        }
+
+        expect(Artisan::call('init', [
+            '--workflow-mode' => $mode,
+            '--workflow' => $workflow,
+            '--force' => $force,
+            '--no-interaction' => true,
+        ]))->toBe(0)
+            ->and(file_get_contents(workflowPath()))->toBe($mode === 'check' ? InitCommand::WORKFLOW_TEMPLATE : InitCommand::OPTIMIZE_TEMPLATE);
+
+        $output = Artisan::output();
+        expect($output)->toContain($mode === 'check' ? 'Optional: set the GLIMPSE_TOKEN' : 'Required: set a private GLIMPSE_TOKEN');
+        Http::assertNothingSent();
+    })->with(['check', 'optimize'])->with([false, true])->with([false, true]);
+
+    test('invalid modes fail before writes or baseline API calls', function (string $mode) {
+        chdirWorkspace();
+        file_put_contents(ignorePath(), "keep-me\n");
+        Http::fake();
+
+        expect(Artisan::call('init', [
+            '--workflow-mode' => $mode,
+            '--force' => true,
+            '--update-baseline' => true,
+            '--no-interaction' => true,
+        ]))->toBe(1)
+            ->and(Artisan::output())->toContain('--workflow-mode must be check or optimize.')
+            ->and(file_get_contents(ignorePath()))->toBe("keep-me\n")
+            ->and(file_exists(baselinePath()))->toBeFalse()
+            ->and(file_exists(workflowPath()))->toBeFalse();
+        Http::assertNothingSent();
+    })->with(['', 'unknown', 'CHECK']);
+
+    test('an explicit mode without force preserves a custom workflow', function (string $mode) {
+        chdirWorkspace();
+        $original = writeWorkflow();
+        expect(Artisan::call('init', ['--workflow-mode' => $mode, '--no-interaction' => true]))->toBe(0)
+            ->and(file_get_contents(workflowPath()))->toBe($original)
+            ->and(Artisan::output())->not->toContain('Required: set a private');
+    })->with(['check', 'optimize']);
+
+    test('check only can be selected interactively', function () {
+        chdirWorkspace();
+        mkdir(workspace().'/.git');
+        $this->artisan('init')
+            ->expectsConfirmation(INIT_SEED_QUESTION)
+            ->expectsChoice(INIT_WORKFLOW_QUESTION, 'Check only', INIT_WORKFLOW_CHOICES)
+            ->expectsOutputToContain('The baseline is empty. The check-only workflow will fail on images above the threshold.')
+            ->assertExitCode(0);
+        expect(file_get_contents(workflowPath()))->toBe(InitCommand::WORKFLOW_TEMPLATE);
+    });
+
+    test('Enter selects optimize but EOF does not opt into a workflow', function (string $input, bool $writes) {
+        chdirWorkspace();
+        mkdir(workspace().'/.git');
+        $process = new Process([PHP_BINARY, base_path('glimpse'), 'init'], workspace());
+        $process->setInput($input);
+        $process->setTimeout(10);
+        $process->run();
+
+        expect($process->getExitCode())->toBe(0)
+            ->and(is_file(workflowPath()))->toBe($writes);
+        if ($writes) {
+            expect(file_get_contents(workflowPath()))->toBe(InitCommand::OPTIMIZE_TEMPLATE);
+        }
+    })->with([
+        'Enter' => ["no\n\n", true],
+        'EOF at seed' => ['', false],
+        'EOF at workflow' => ["no\n", false],
+    ]);
+});
+
+test('a workflow mode flag without a value fails before overwriting files', function () {
+    chdirWorkspace();
+    file_put_contents(ignorePath(), "keep-me\n");
+    $process = new Process([PHP_BINARY, base_path('glimpse'), 'init', '--workflow-mode', '--force', '--no-interaction'], workspace());
+    $process->run();
+
+    expect($process->getExitCode())->toBe(1)
+        ->and($process->getOutput())->toContain('--workflow-mode must be check or optimize.')
+        ->and(file_get_contents(ignorePath()))->toBe("keep-me\n")
+        ->and(file_exists(baselinePath()))->toBeFalse()
+        ->and(file_exists(workflowPath()))->toBeFalse();
 });
