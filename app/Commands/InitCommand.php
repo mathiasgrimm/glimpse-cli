@@ -143,152 +143,27 @@ class InitCommand extends Command
                   persist-credentials: false
 
               - name: Check and optimize reported images
-                id: images
+                shell: bash
                 env:
                   GLIMPSE_TOKEN: ${{ secrets.GLIMPSE_TOKEN }}
-                  BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
                 run: |
-                  php <<'PHP'
-                  <?php
-                  function run(array $arguments): array
-                  {
-                      $process = proc_open($arguments, [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => STDERR], $pipes);
-                      if (!is_resource($process)) {
-                          throw new RuntimeException('Could not start command.');
-                      }
-                      $output = stream_get_contents($pipes[1]);
-                      fclose($pipes[1]);
-                      return [proc_close($process), $output];
-                  }
-
-                  function command(array $arguments): string
-                  {
-                      [$status, $output] = run($arguments);
-                      if ($status !== 0) {
-                          throw new RuntimeException('Command failed: '.$arguments[0]);
-                      }
-                      return $output;
-                  }
-
-                  function readJson(string $json): array
-                  {
-                      $value = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
-                      if (!is_array($value)) {
-                          throw new RuntimeException('Expected a JSON object.');
-                      }
-                      return $value;
-                  }
-
-                  function regularPath(string $file): string
-                  {
-                      $root = getcwd();
-                      if ($file === '' || str_contains($file, "\0") || realpath($file) !== $root.'/'.$file || !is_file($file) || is_link($file)) {
-                          throw new RuntimeException('Expected a regular file inside the repository: '.json_encode($file));
-                      }
-                      return './'.$file;
-                  }
-
-                  function imageDetails(string $path): array
-                  {
-                      $details = getimagesize($path);
-                      if ($details === false) {
-                          throw new RuntimeException('Could not read image dimensions and format.');
-                      }
-                      return [$details[0], $details[1], $details['mime']];
-                  }
-
-                  function finish(string $body): void
-                  {
-                      $branch = 'automation/glimpse-'.hash('sha256', getenv('BASE_BRANCH'));
-                      foreach ([
-                          getenv('RUNNER_TEMP').'/glimpse-pr.md' => $body,
-                          getenv('GITHUB_STEP_SUMMARY') => $body,
-                          getenv('GITHUB_OUTPUT') => "checked=true\nbranch=".$branch."\n",
-                      ] as $path => $content) {
-                          if (file_put_contents($path, $content, FILE_APPEND) === false) {
-                              throw new RuntimeException('Could not write workflow results.');
-                          }
-                      }
-                  }
-
-                  if (trim(getenv('GLIMPSE_TOKEN') ?: '') === '') {
-                      throw new RuntimeException('Set a private GLIMPSE_TOKEN repository secret.');
-                  }
-                  $baselinePath = '.glimpse-baseline.json';
-                  if (is_link($baselinePath) || (file_exists($baselinePath) && !is_file($baselinePath))) {
-                      throw new RuntimeException('The baseline must be a regular file.');
-                  }
-                  [$status, $json] = run(['glimpse', 'check', '.', '--json']);
-                  $report = readJson($json);
-                  if (!in_array($status, [0, 1], true) || !isset($report['files'], $report['failed'], $report['needs_optimization'])
-                      || !is_array($report['files']) || !array_is_list($report['files']) || $report['failed'] !== []
-                      || $report['needs_optimization'] !== count($report['files'])
-                      || $status !== ($report['files'] === [] ? 0 : 1)) {
-                      throw new RuntimeException('Image check failed or returned an invalid report.');
-                  }
-                  if ($report['files'] === []) {
-                      finish("No images currently need optimization.\n");
-                      exit(0);
-                  }
-
-                  $tracked = array_flip(explode("\0", command(['git', 'ls-files', '-z'])));
-                  $files = [];
-                  foreach ($report['files'] as $row) {
-                      $file = $row['file'] ?? null;
-                      if (!is_string($file) || !isset($tracked[$file]) || isset($files[$file])) {
-                          throw new RuntimeException('The report must contain unique tracked image paths.');
-                      }
-                      $files[$file] = regularPath($file);
-                  }
-                  if (!file_exists($baselinePath)) {
-                      if (file_put_contents($baselinePath, '{"files":{}}'.PHP_EOL) === false) {
-                          throw new RuntimeException('Could not create the baseline.');
-                      }
-                  }
-
-                  $body = "Optimize images at quality 85, keeping their formats, dimensions, and filenames.\n\n";
-                  $body .= "Quality may change and metadata may be removed. Successful results are recorded in the baseline, including zero-saving results.\n\n";
-                  $body .= "| Image | Before | After | Saved |\n| --- | ---: | ---: | ---: |\n";
-                  foreach ($files as $file => $path) {
-                      $before = strlen(file_get_contents($path));
-                      $details = imageDetails($path);
-                      command(['glimpse', 'optimize', $path, '--quality=85', '--output='.$path, '--force', '--json']);
-                      clearstatcache();
-                      regularPath($file);
-                      $after = strlen(file_get_contents($path));
-                      if ($after > $before || $after === 0 || imageDetails($path) !== $details) {
-                          throw new RuntimeException('Optimization changed the format or dimensions, or increased the size.');
-                      }
-                      $baseline = readJson(file_get_contents($baselinePath));
-                      $entry = $baseline['files'][$file] ?? null;
-                      if (!is_array($entry) || ($entry['via'] ?? null) !== 'optimize'
-                          || ($entry['size'] ?? null) !== $after || ($entry['xxh128'] ?? null) !== hash_file('xxh128', $path)) {
-                          throw new RuntimeException('The optimized image was not recorded in the baseline.');
-                      }
-                      $label = htmlspecialchars($file, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-                      $label = str_replace(["|", "\r", "\n"], ['&#124;', '&#13;', '&#10;'], $label);
-                      $body .= '| <code>'.$label.'</code> | '.$before.' | '.$after.' | '.($before - $after)." |\n";
-                  }
-
-                  // Stage exact paths. The PR action adds only the baseline and keeps these staged images.
-                  foreach ($files as $path) {
-                      command(['git', '--literal-pathspecs', 'add', '--', $path]);
-                  }
-                  command(['git', '--literal-pathspecs', 'add', '--force', '--', $baselinePath]);
-                  finish($body);
-                  PHP
+                  # Check exits 1 for both reported images and checking errors.
+                  glimpse check . --json > "$RUNNER_TEMP/glimpse-check.json" || test "$?" -eq 1
+                  jq -e '.failed == []' "$RUNNER_TEMP/glimpse-check.json" > /dev/null
+                  jq -j '.files[] | .file, "\u0000"' "$RUNNER_TEMP/glimpse-check.json" |
+                    while IFS= read -r -d '' file; do
+                      glimpse optimize "./$file" --quality=85 --output="./$file" --force
+                    done
 
               - name: Open or update the optimization PR
-                if: steps.images.outputs.checked == 'true'
                 uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
                 with:
                   token: ${{ secrets.GITHUB_TOKEN }}
                   base: ${{ github.event.pull_request.base.ref }}
-                  branch: ${{ steps.images.outputs.branch }}
+                  branch: automation/glimpse-${{ github.event.pull_request.base.ref }}
                   title: Optimize images
                   commit-message: Optimize images
-                  body-path: ${{ runner.temp }}/glimpse-pr.md
-                  add-paths: .glimpse-baseline.json
+                  body: Optimize images reported by glimpse check, keeping their formats and filenames.
                   delete-branch: true
         YAML;
 
