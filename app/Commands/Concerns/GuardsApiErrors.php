@@ -21,43 +21,57 @@ trait GuardsApiErrors
         try {
             return $callback() ?? self::SUCCESS;
         } catch (ValidationException $e) {
-            $this->error($e->getMessage());
+            $this->diagnostic($e->getMessage());
 
             foreach ($e->errors as $field => $messages) {
                 foreach ($messages as $message) {
-                    $this->line("  <fg=red>{$field}</>: {$message}");
+                    $this->diagnostic("{$field}: {$message}");
                 }
             }
 
             return self::FAILURE;
         } catch (ConnectionException $e) {
-            $this->error('Could not reach the Glimpse API: '.$e->getMessage());
+            $this->diagnostic('Could not reach the Glimpse API: '.$e->getMessage());
 
             return self::FAILURE;
         } catch (AuthException $e) {
-            $this->error($e->getMessage().' Run: glimpse auth');
+            $this->diagnostic($e->getMessage().' Run: glimpse auth');
             // A rejected built-in token means this CLI build carries a
             // rotated-out token; the hint points at the way forward.
             $this->publicTokenHint();
 
             return self::FAILURE;
         } catch (RateLimitException $e) {
-            $this->error($e->getMessage().($e->retryAfterSeconds !== null
+            $this->diagnostic($e->getMessage().($e->retryAfterSeconds !== null
                 ? sprintf(' Retry after %d seconds.', $e->retryAfterSeconds)
                 : ''));
             $this->publicTokenHint();
 
             return self::FAILURE;
         } catch (ForbiddenException $e) {
-            $this->error($e->getMessage());
+            $this->diagnostic($e->getMessage());
             $this->publicTokenHint();
 
             return self::FAILURE;
         } catch (ApiException $e) {
-            $this->error($e->getMessage());
+            $this->diagnostic($e->getMessage());
 
             return self::FAILURE;
         }
+    }
+
+    private function diagnostic(string $message): void
+    {
+        $machineOutput = ($this->hasOption('json') && $this->option('json'))
+            || ($this->hasOption('output') && $this->option('output') === '-');
+
+        if ($machineOutput) {
+            fwrite(STDERR, $message.PHP_EOL);
+
+            return;
+        }
+
+        $this->error($message);
     }
 
     /**
@@ -70,6 +84,6 @@ trait GuardsApiErrors
             return;
         }
 
-        $this->line('You are using the built-in public CI token. It only runs check and analyze, and its rate limits are shared. Get your own free token at https://glimpseimg.com and set GLIMPSE_TOKEN for higher limits and your own usage dashboard.');
+        $this->diagnostic('You are using the built-in public CI token. It supports image commands with shared limits. Get your own free token at https://glimpseimg.com and set GLIMPSE_TOKEN for higher limits and your own usage dashboard.');
     }
 }

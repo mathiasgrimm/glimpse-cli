@@ -22,13 +22,12 @@ class OptimizeCommand extends GlimpseCommand
     public function handle(Client $client): int
     {
         return $this->runGuarded(function () use ($client) {
-            $this->rejectPublicToken();
-
             $input = $this->inputArgument();
             $output = $this->resolveOutput($input);
             $quality = $this->intOption('quality');
 
-            $result = $client->optimize($this->readImage($input), $quality);
+            $bytes = $this->readImage($input);
+            $result = $this->imageWithRetry(fn () => $client->optimize($bytes, $quality));
 
             $path = $this->writeResult($input, $output, 'optimized', $result);
             $this->recordInBaseline($input, $path);

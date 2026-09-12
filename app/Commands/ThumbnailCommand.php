@@ -24,17 +24,17 @@ class ThumbnailCommand extends GlimpseCommand
     public function handle(Client $client): int
     {
         return $this->runGuarded(function () use ($client) {
-            $this->rejectPublicToken();
-
             $input = $this->inputArgument();
             $output = $this->resolveOutput($input);
 
-            $result = $client->thumbnail(
-                $this->readImage($input),
-                $this->intOption('width'),
-                $this->intOption('height'),
-                $this->intOption('quality'),
-            );
+            $bytes = $this->readImage($input);
+            $width = $this->intOption('width');
+            $height = $this->intOption('height');
+            $quality = $this->intOption('quality');
+
+            $result = $this->imageWithRetry(fn () => $client->thumbnail(
+                $bytes, $width, $height, $quality,
+            ));
 
             $path = $this->writeResult($input, $output, 'thumb', $result);
             $this->recordInBaseline($input, $path, recordSource: false);

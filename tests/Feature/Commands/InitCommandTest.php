@@ -339,7 +339,7 @@ describe('workflow scaffolding', function () {
         $output = Artisan::output();
 
         expect($output)->toContain('Created '.InitCommand::WORKFLOW_PATH.'.')
-            ->and($output)->toContain('Required: set a private GLIMPSE_TOKEN secret for optimization: gh secret set GLIMPSE_TOKEN')
+            ->and($output)->toContain('Optional: set the GLIMPSE_TOKEN secret for higher rate limits and usage attribution: gh secret set GLIMPSE_TOKEN')
             ->and($output)->toContain('Commit '.IgnoreFile::FILENAME.', '.BaselineFile::FILENAME.', and '.InitCommand::WORKFLOW_PATH.'.')
             ->and($output)->not->toContain('Gate new images in CI')
             ->and((string) file_get_contents(workflowPath()))->toBe(InitCommand::OPTIMIZE_TEMPLATE);
@@ -356,7 +356,7 @@ describe('workflow scaffolding', function () {
         $this->artisan('init')
             ->expectsConfirmation(INIT_SEED_QUESTION)
             ->expectsOutputToContain(InitCommand::WORKFLOW_PATH.' already exists, kept (use --workflow-mode=check or --workflow-mode=optimize with --force to replace it).')
-            ->expectsOutputToContain('Review '.InitCommand::WORKFLOW_PATH.'; a private GLIMPSE_TOKEN is required for optimization and optional for check only.')
+            ->expectsOutputToContain('Review '.InitCommand::WORKFLOW_PATH.'; GLIMPSE_TOKEN is optional in both workflow modes.')
             ->assertExitCode(0);
 
         expect((string) file_get_contents(workflowPath()))->toBe($content);
@@ -538,7 +538,7 @@ describe('empty baseline warning', function () {
         Http::fake();
 
         expect(Artisan::call('init', ['--no-interaction' => true]))->toBe(0)
-            ->and(Artisan::output())->toContain('a private GLIMPSE_TOKEN is required for optimization and optional for check only.')
+            ->and(Artisan::output())->toContain('GLIMPSE_TOKEN is optional in both workflow modes.')
             ->and(Artisan::output())->not->toContain(INIT_EMPTY_BASELINE_WARNING);
     });
 
@@ -629,7 +629,7 @@ describe('workflow modes', function () {
             ->and(file_get_contents(workflowPath()))->toBe($mode === 'check' ? InitCommand::WORKFLOW_TEMPLATE : InitCommand::OPTIMIZE_TEMPLATE);
 
         $output = Artisan::output();
-        expect($output)->toContain($mode === 'check' ? 'Optional: set the GLIMPSE_TOKEN' : 'Required: set a private GLIMPSE_TOKEN');
+        expect($output)->toContain('Optional: set the GLIMPSE_TOKEN');
         Http::assertNothingSent();
     })->with(['check', 'optimize'])->with([false, true])->with([false, true]);
 

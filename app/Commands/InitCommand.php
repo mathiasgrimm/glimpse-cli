@@ -71,8 +71,8 @@ class InitCommand extends Command
      * The GLIMPSE_TOKEN secret is optional. When the env var is empty
      * (fork pull requests never receive repository secrets, and a fresh
      * repository may not have set it yet), the CLI falls back to its
-     * built-in public token, which can only call the analyze endpoint
-     * and shares rate limits per runner IP. A repository's own secret
+     * built-in public token, which supports image commands with shared
+     * rate limits. A repository's own secret
      * gives higher limits and usage attribution.
      */
     public const WORKFLOW_TEMPLATE = <<<'YAML'
@@ -92,7 +92,7 @@ class InitCommand extends Command
             env:
               # Optional. Without it (for example on fork pull requests, which
               # never receive secrets) the CLI uses its built-in public token,
-              # which only allows check and analyze and shares rate limits.
+              # which supports image commands with shared limits.
               GLIMPSE_TOKEN: ${{ secrets.GLIMPSE_TOKEN }}
             steps:
               - uses: actions/checkout@v6
@@ -145,6 +145,7 @@ class InitCommand extends Command
               - name: Check and optimize reported images
                 shell: bash
                 env:
+                  # Optional. Personal tokens provide higher limits and personal usage tracking.
                   GLIMPSE_TOKEN: ${{ secrets.GLIMPSE_TOKEN }}
                 run: |
                   # Check exits 1 for both reported images and checking errors.
@@ -315,7 +316,7 @@ class InitCommand extends Command
         }
 
         if ($mode === null && $this->isGitRoot($root) && $this->input->isInteractive()) {
-            $this->line('Check and optimize: after a PR merges, open an optimization PR. Requires a private GLIMPSE_TOKEN.');
+            $this->line('Check and optimize: after a PR merges, open an optimization PR. GLIMPSE_TOKEN is optional.');
             $this->line('Check only: check pull requests and pushes to main. The token is optional.');
             $choice = $this->choice('Which GitHub Actions workflow would you like?', [
                 'Check and optimize',
@@ -371,9 +372,7 @@ class InitCommand extends Command
         }
 
         if ($this->workflowWritten !== null) {
-            $steps[] = $this->workflowWritten === 'check'
-                ? 'Optional: set the GLIMPSE_TOKEN secret for higher rate limits and usage attribution: gh secret set GLIMPSE_TOKEN'
-                : 'Required: set a private GLIMPSE_TOKEN secret for optimization: gh secret set GLIMPSE_TOKEN';
+            $steps[] = 'Optional: set the GLIMPSE_TOKEN secret for higher rate limits and usage attribution: gh secret set GLIMPSE_TOKEN';
 
             if ($this->workflowWritten === 'optimize') {
                 $steps[] = 'Install the workflow on your default branch and allow GitHub Actions to create pull requests. Generated PR checks require approval.';
@@ -384,7 +383,7 @@ class InitCommand extends Command
             $steps[] = 'Commit '.IgnoreFile::FILENAME.' and '.BaselineFile::FILENAME.'.';
 
             $steps[] = $this->workflowKept
-                ? 'Review '.self::WORKFLOW_PATH.'; a private GLIMPSE_TOKEN is required for optimization and optional for check only.'
+                ? 'Review '.self::WORKFLOW_PATH.'; GLIMPSE_TOKEN is optional in both workflow modes.'
                 : 'Gate new images in CI: glimpse check .  (see https://glimpseimg.com/docs/cli/continuous-integration)';
         }
 

@@ -7,10 +7,9 @@ final class Config
     private const DEFAULT_API_URL = 'https://glimpseimg.com/api';
 
     /**
-     * The published analyze-only CI token, baked into each release so
+     * The published image-only token, baked into each release so
      * `glimpse check` works on fork pull requests without a repository
-     * secret. It can only call the analyze endpoint and its rate limits
-     * are shared per runner IP. Empty in the repository; the release
+     * secret. It supports image commands with shared rate limits. Empty in the repository; the release
      * process fills it in before tagging, and an empty value keeps the
      * fallback off.
      */

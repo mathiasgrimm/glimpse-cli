@@ -26,8 +26,6 @@ class ConvertCommand extends GlimpseCommand
     public function handle(Client $client): int
     {
         return $this->runGuarded(function () use ($client) {
-            $this->rejectPublicToken();
-
             $input = $this->inputArgument();
             $output = $this->resolveOutput($input);
             $format = $this->resolveFormat($output);
@@ -46,7 +44,8 @@ class ConvertCommand extends GlimpseCommand
                 }
             }
 
-            $result = $client->convert($this->readImage($input), $format, $optimize, $quality);
+            $bytes = $this->readImage($input);
+            $result = $this->imageWithRetry(fn () => $client->convert($bytes, $format, $optimize, $quality));
 
             $path = $this->writeResult($input, $output, null, $result);
             $this->recordInBaseline($input, $path);

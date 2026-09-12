@@ -22,13 +22,14 @@ Shipping images means wrangling ImageMagick, libvips, mozjpeg, cwebp and avifenc
 
 ```bash
 composer global require mathiasgrimm/glimpse-cli
-glimpse auth
 glimpse convert banner.png --format=avif
 ```
 
 ```
 Wrote banner.avif (image/avif, 24.2 KB, 3200x840)
 ```
+
+Image commands work with the built-in public token. Use `glimpse auth` or set `GLIMPSE_TOKEN` for higher limits and personal usage tracking. Account and usage commands require a personal token. Both workflow modes can run without `GLIMPSE_TOKEN`. Transform and info commands upload your image; analyze and check send image measurements.
 
 That's a real session: `banner.png` is a frame of the banner at the top of this page, re-encoded from 360.3 KB down to 24.2 KB. The banner you are actually looking at goes one step further; it is a two-frame animated AVIF (watch the green dot blink) that glimpse converted from a GIF, 40.1 KB in total. Want to know what a conversion will buy you *before* you convert? `glimpse analyze` predicts the output size for every format **without uploading your image**:
 

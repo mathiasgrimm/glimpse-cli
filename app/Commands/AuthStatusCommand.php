@@ -31,7 +31,7 @@ class AuthStatusCommand extends Command
 
             if ($config->usingPublicToken()) {
                 $this->line('Token:   (built-in public CI token)');
-                $this->error('Not authenticated. The public token only runs check and analyze. Run: glimpse auth');
+                $this->error('Not authenticated. Personal account details require your own token. Run: glimpse auth');
 
                 return self::FAILURE;
             }
