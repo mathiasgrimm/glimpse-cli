@@ -148,6 +148,8 @@ class InitCommand extends Command
                   GLIMPSE_TOKEN: ${{ secrets.GLIMPSE_TOKEN }}
                 run: cpx mathiasgrimm/glimpse-cli check . --fix
 
+              # In Settings → Actions → General → Workflow permissions, enable
+              # "Allow GitHub Actions to create and approve pull requests".
               - name: Open or update the optimization PR
                 uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
                 with:
