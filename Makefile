@@ -30,7 +30,7 @@ verify-phar:
 # shipped CLI must carry a real public token: with an empty constant,
 # fork pull requests fail on authentication instead of being checked.
 check-public-token:
-	@! grep -q "private const PUBLIC_TOKEN = '';" app/Glimpse/Config.php || { echo "Config::PUBLIC_TOKEN is empty. Bake the published analyze-only token before releasing."; exit 1; }
+	@! grep -q "private const PUBLIC_TOKEN = '';" app/Glimpse/Config.php || { echo "Config::PUBLIC_TOKEN is empty. Bake the published image-only token before releasing."; exit 1; }
 
 release: check-version check-public-token
 	@[ "$$(git branch --show-current)" = "main" ] || { echo "Releases are cut from main."; exit 1; }

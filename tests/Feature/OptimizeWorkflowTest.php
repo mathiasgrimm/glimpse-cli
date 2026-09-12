@@ -79,3 +79,16 @@ test('an optimize failure stops the loop and fails the job', function () {
             ['optimize', './first.png', '--quality=85', '--output=./first.png', '--force'],
         ]);
 });
+
+test('missing or malformed check output fails before any optimization', function (string $output) {
+    $process = workflowProcess(workflowReport(['photo.png']));
+    file_put_contents(test()->configHome.'/report.json', $output);
+    $process->run();
+    expect($process->isSuccessful())->toBeFalse()
+        ->and(workflowCalls())->toBe([['check', '.', '--json']]);
+})->with(['', '{bad json', '{}', 'null']);
+
+test('automatic optimization works without a Glimpse secret', function () {
+    workflowProcess(workflowReport(['photo.png']), ['GLIMPSE_TOKEN' => ''])->mustRun();
+    expect(workflowCalls())->toHaveCount(2);
+});

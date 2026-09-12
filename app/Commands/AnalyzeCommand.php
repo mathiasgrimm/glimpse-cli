@@ -64,7 +64,7 @@ class AnalyzeCommand extends GlimpseCommand
 
         [$width, $height, $sampleBpp] = $this->measure($probe, $bytes);
 
-        $estimates = $this->estimateRows($this->analyzeWithRetry(
+        $estimates = $this->estimateRows($this->imageWithRetry(
             fn (): array => $client->analyze($format, strlen($bytes), $width, $height, $quality, $sampleBpp, $this->frames($bytes)),
         ));
 

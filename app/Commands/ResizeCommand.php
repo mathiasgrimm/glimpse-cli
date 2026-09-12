@@ -26,8 +26,6 @@ class ResizeCommand extends GlimpseCommand
     public function handle(Client $client): int
     {
         return $this->runGuarded(function () use ($client) {
-            $this->rejectPublicToken();
-
             $input = $this->inputArgument();
             $output = $this->resolveOutput($input);
             $width = $this->intOption('width');
@@ -44,7 +42,8 @@ class ResizeCommand extends GlimpseCommand
                 throw new ApiException('--quality requires --optimize.');
             }
 
-            $result = $client->resize($this->readImage($input), $width, $height, $optimize, $quality);
+            $bytes = $this->readImage($input);
+            $result = $this->imageWithRetry(fn () => $client->resize($bytes, $width, $height, $optimize, $quality));
 
             $path = $this->writeResult($input, $output, 'resized', $result);
             $this->recordInBaseline($input, $path, recordSource: false);

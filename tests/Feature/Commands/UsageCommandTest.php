@@ -70,7 +70,7 @@ test('refuses the built-in public token without calling the API', function () {
     $exitCode = Artisan::call('usage');
 
     expect($exitCode)->toBe(1)
-        ->and(Artisan::output())->toContain('The built-in public CI token only runs check and analyze.');
+        ->and(Artisan::output())->toContain('Personal usage requires your own token.');
 
     Http::assertNothingSent();
 });

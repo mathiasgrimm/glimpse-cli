@@ -14,7 +14,7 @@ jobs:
     env:
       # Optional. Without it (for example on fork pull requests, which
       # never receive secrets) the CLI uses its built-in public token,
-      # which only allows check and analyze and shares rate limits.
+      # which supports image commands with shared limits.
       GLIMPSE_TOKEN: ${{ secrets.GLIMPSE_TOKEN }}
     steps:
       - uses: actions/checkout@v6

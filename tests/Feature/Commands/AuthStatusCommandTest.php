@@ -47,7 +47,7 @@ test('reports the built-in public token as not authenticated, without calling th
 
     expect($exitCode)->toBe(1)
         ->and($output)->toContain('built-in public CI token')
-        ->and($output)->toContain('The public token only runs check and analyze.');
+        ->and($output)->toContain('Personal account details require your own token.');
 
     Http::assertNothingSent();
 });

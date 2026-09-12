@@ -494,17 +494,13 @@ test('a 403 shows the API message without the public token hint', function () {
         ->and($output)->not->toContain('Get your own free token');
 });
 
-test('refuses the built-in public token before uploading anything', function () {
+test('converts with the built-in public token', function () {
     putenv('GLIMPSE_TOKEN');
     app()->instance(Config::class, new Config(publicTokenOverride: 'pub-token'));
-    Http::fake();
+    fakeTransform('convert');
 
-    $path = createImage();
+    $exitCode = Artisan::call('convert', ['input' => createImage(), '--format' => 'jpg']);
 
-    $exitCode = Artisan::call('convert', ['input' => $path, '--format' => 'jpg']);
-
-    expect($exitCode)->toBe(1)
-        ->and(Artisan::output())->toContain('The built-in public CI token only runs check and analyze.');
-
-    Http::assertNothingSent();
+    expect($exitCode)->toBe(0);
+    Http::assertSent(fn ($request) => $request->hasHeader('Authorization', 'Bearer pub-token'));
 });
