@@ -15,10 +15,9 @@ final class ImageFinder
      * Find every image file under the directory, recursively, sorted by
      * pathname. Dot entries (directories and files) are skipped: .git is
      * never wanted, and macOS AppleDouble files (._photo.jpg) carry image
-     * extensions without being images. Symlinked directories (Laravel's
-     * public/storage) are skipped too: the iterator will not recurse into
-     * them, and letting them through yields the link itself as if it were
-     * a file. Symlinks to image files still resolve normally. A
+     * extensions without being images. Symlinked files and directories
+     * are skipped so scans cannot read or overwrite targets outside the
+     * directory or bypass its ignore rules through an alias. A
      * .glimpseignore file in the current working directory excludes
      * further paths, matched by their working-directory-relative path; a
      * directory scanned from outside the working directory is beyond the
@@ -39,7 +38,7 @@ final class ImageFinder
                     return false;
                 }
 
-                if ($file->isDir() && $file->isLink()) {
+                if ($file->isLink()) {
                     return false;
                 }
 

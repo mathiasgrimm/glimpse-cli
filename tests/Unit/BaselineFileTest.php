@@ -259,6 +259,27 @@ test('concurrent first-time creation fails loudly instead of losing entries', fu
         ->and(array_keys(baselineFiles()))->toBe(['a.png']);
 });
 
+test('save cannot redirect its temporary write through a pre-existing symlink', function (bool $existingBaseline) {
+    $image = createImage('photo.png');
+    $outside = test()->configHome.'/sentinel';
+    file_put_contents($outside, 'untouched');
+    $link = baselinePath().'.'.getmypid().'.tmp';
+    symlink($outside, $link);
+    if ($existingBaseline) {
+        writeBaseline();
+    }
+
+    $baseline = BaselineFile::load(workspace(), forUpdate: true);
+    $baseline->record('photo.png', $image, 'skip');
+    $baseline->save(workspace());
+
+    expect(file_get_contents($outside))->toBe('untouched')
+        ->and(is_link(baselinePath()))->toBeFalse()
+        ->and(is_link($link))->toBeTrue()
+        ->and(baselineFiles())->toBe(['photo.png' => baselineEntry($image, 'skip')])
+        ->and(glob(baselinePath().'.*'))->toBe([$link]);
+})->with([false, true]);
+
 test('save leaves no temporary or stray files behind', function () {
     writeBaseline();
 
