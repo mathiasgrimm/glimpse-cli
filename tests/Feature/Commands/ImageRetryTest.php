@@ -22,6 +22,7 @@ test('retries image calls with the same bytes then writes only the successful re
 
     expect(Artisan::call($command, ['input' => $path, ...$options, '--json' => true]))->toBe(0)
         ->and($sleeper->delays)->toBe([1]);
+    Http::assertSentCount(2);
     $requests = Http::recorded();
     expect($requests[0][0]->body())->toBe($requests[1][0]->body())
         ->and(json_decode(Artisan::output(), true))->toBeArray();
@@ -43,6 +44,7 @@ test('exhausted retries preserve input output and baseline', function (string $c
         ->and(file_get_contents($path))->toBe($before)
         ->and(file_get_contents(baselinePath()))->toBe($baseline);
     Http::assertSentCount(4);
+    Http::assertNotSent(fn ($request): bool => $request['input']['data'] !== base64_encode($before));
 })->with('retry image commands');
 
 test('long rate limits and other errors do not retry', function (int $status, array $headers) {
