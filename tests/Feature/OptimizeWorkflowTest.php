@@ -27,12 +27,12 @@ test('the optimization workflow runs check --fix and preserves its exit status',
 
 test('the optimization workflow sets up cpx with PHP 8.5', function () {
     expect(InitCommand::OPTIMIZE_TEMPLATE)
-        ->toContain("php-version: '8.5'", 'tools: cpx')
+        ->toContain("php-version: '8.5'", 'tools: cpx/cpx')
         ->not->toContain('composer global', 'jq ', '--quality=85');
 });
 
 test('the check-only workflow uses cpx and remains read-only', function () {
     expect(InitCommand::WORKFLOW_TEMPLATE)
-        ->toContain("php-version: '8.5'", 'tools: cpx', 'run: cpx mathiasgrimm/glimpse-cli check .')
+        ->toContain("php-version: '8.5'", 'tools: cpx/cpx', 'run: cpx mathiasgrimm/glimpse-cli check .')
         ->not->toContain('--fix', 'composer global');
 });

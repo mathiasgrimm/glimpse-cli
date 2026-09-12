@@ -97,7 +97,7 @@ class InitCommand extends Command
                 uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45 # v2
                 with:
                   php-version: '8.5'
-                  tools: cpx
+                  tools: cpx/cpx
                   coverage: none
               - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               - name: Check images
@@ -133,7 +133,7 @@ class InitCommand extends Command
                 uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45 # v2
                 with:
                   php-version: '8.5'
-                  tools: cpx
+                  tools: cpx/cpx
                   coverage: none
 
               - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
