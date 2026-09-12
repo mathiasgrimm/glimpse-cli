@@ -10,6 +10,7 @@ use MathiasGrimm\GlimpseCli\Support\Paths;
 use MathiasGrimm\GlimpsePhp\ApiException;
 use MathiasGrimm\GlimpsePhp\Client;
 use MathiasGrimm\GlimpsePhp\SampleProbe;
+use Symfony\Component\Console\Output\BufferedOutput;
 
 class CheckCommand extends GlimpseCommand
 {
@@ -18,6 +19,8 @@ class CheckCommand extends GlimpseCommand
     protected $signature = 'check
         {input : Path to an image or a directory to scan recursively}
         {--threshold=10 : Flag images whose best-format estimated saving is at least this percent (0-100)}
+        {--fix : Optimize flagged images in place after checking succeeds}
+        {--quality= : Re-encode quality for --fix (omit to use the optimize default)}
         {--json : Print the results as JSON}';
 
     protected $description = 'Fail when images would benefit from optimization; built for CI';
@@ -26,6 +29,12 @@ class CheckCommand extends GlimpseCommand
     {
         return $this->runGuarded(function () use ($client, $probe) {
             $threshold = $this->threshold();
+            $quality = $this->intOption('quality');
+
+            if ($quality !== null && ! $this->option('fix')) {
+                throw new ApiException('--quality requires --fix.');
+            }
+
             $input = $this->inputArgument();
 
             [$dir, $files] = $this->collect($input);
@@ -77,12 +86,62 @@ class CheckCommand extends GlimpseCommand
                     && $row['saved_percent'] >= $threshold,
             )));
 
+            if ($this->option('fix') && $failed === []) {
+                return $this->fix($dir, $offenders, count($rows), $threshold, $skipped, $quality);
+            }
+
             $this->option('json')
                 ? $this->emitJson($offenders, $failed, count($rows), $threshold, $skipped)
                 : $this->render($offenders, $failed, count($rows), $threshold, $skipped);
 
             return $offenders === [] && $failed === [] ? self::SUCCESS : self::FAILURE;
         });
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $offenders
+     */
+    private function fix(string $dir, array $offenders, int $total, float $threshold, int $skipped, ?int $quality): int
+    {
+        $fixed = [];
+        $failed = [];
+
+        foreach ($offenders as $row) {
+            $file = (string) $row['file'];
+            $path = rtrim($dir, '/').'/'.$file;
+            $arguments = ['input' => $path, '--output' => $path, '--force' => true];
+
+            if ($quality !== null) {
+                $arguments['--quality'] = $quality;
+            }
+
+            $output = new BufferedOutput;
+            $status = $this->runCommand(OptimizeCommand::class, $arguments, $output);
+            $message = trim($output->fetch());
+
+            if (! $this->option('json')) {
+                $this->line($message);
+            }
+
+            if ($status !== self::SUCCESS) {
+                $failed[] = ['file' => $file, 'error' => $message];
+                break;
+            }
+
+            $fixed[] = $file;
+        }
+
+        if ($this->option('json')) {
+            $this->emitJson($offenders, $failed, $total, $threshold, $skipped, $fixed);
+        } else {
+            $this->info(sprintf('Optimized %d %s.', count($fixed), Str::plural('image', count($fixed))));
+
+            if ($skipped > 0) {
+                $this->line($this->baselineSkippedLine($skipped));
+            }
+        }
+
+        return $failed === [] ? self::SUCCESS : self::FAILURE;
     }
 
     /**
@@ -164,8 +223,9 @@ class CheckCommand extends GlimpseCommand
     /**
      * @param  list<array<string, mixed>>  $offenders
      * @param  list<array<string, mixed>>  $failed
+     * @param  list<string>  $fixed
      */
-    private function emitJson(array $offenders, array $failed, int $total, float $threshold, int $baselineSkipped): void
+    private function emitJson(array $offenders, array $failed, int $total, float $threshold, int $baselineSkipped, array $fixed = []): void
     {
         $this->line((string) json_encode([
             'threshold' => $threshold,
@@ -174,6 +234,6 @@ class CheckCommand extends GlimpseCommand
             'files' => $offenders,
             'failed' => $failed,
             'baseline_skipped' => $baselineSkipped,
-        ], JSON_UNESCAPED_SLASHES));
+        ] + ($this->option('fix') ? ['fixed' => $fixed] : []), JSON_UNESCAPED_SLASHES));
     }
 }
