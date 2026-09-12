@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "245c3c68ddb5816cef23db720df6face",
+    "content-hash": "5bbd941198c138722a0ee1c8a8025dca",
     "packages": [],
     "packages-dev": [
         {
@@ -2975,19 +2975,20 @@
         },
         {
             "name": "mathiasgrimm/glimpse-php",
-            "version": "v3.1.0",
+            "version": "v3.2.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/mathiasgrimm/glimpse-php.git",
-                "reference": "b5564728b07a5a1f950f23742b6e01c3559d9bab"
+                "reference": "e1fb4b5eb081c489f23c8286dbc8be18b94ac07c"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/mathiasgrimm/glimpse-php/zipball/b5564728b07a5a1f950f23742b6e01c3559d9bab",
-                "reference": "b5564728b07a5a1f950f23742b6e01c3559d9bab",
+                "url": "https://api.github.com/repos/mathiasgrimm/glimpse-php/zipball/e1fb4b5eb081c489f23c8286dbc8be18b94ac07c",
+                "reference": "e1fb4b5eb081c489f23c8286dbc8be18b94ac07c",
                 "shasum": ""
             },
             "require": {
+                "composer-runtime-api": "^2.0",
                 "guzzlehttp/guzzle": "^7.8",
                 "illuminate/http": "^10.0|^11.0|^12.0|^13.0",
                 "php": "^8.2"
@@ -3038,7 +3039,7 @@
                 "issues": "https://github.com/mathiasgrimm/glimpse-php/issues",
                 "source": "https://github.com/mathiasgrimm/glimpse-php"
             },
-            "time": "2026-08-02T04:02:06+00:00"
+            "time": "2026-09-12T18:07:50+00:00"
         },
         {
             "name": "mockery/mockery",

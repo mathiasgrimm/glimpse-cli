@@ -4,7 +4,6 @@ namespace MathiasGrimm\GlimpseCli\Providers;
 
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Http\Client\Factory;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\ServiceProvider;
 use MathiasGrimm\GlimpseCli\Glimpse\Config;
 use MathiasGrimm\GlimpsePhp\Client;
@@ -16,9 +15,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        Http::globalOptions(fn (): array => [
-            'headers' => ['User-Agent' => 'glimpse-cli/'.config('app.version')],
-        ]);
+        //
     }
 
     /**
@@ -35,7 +32,12 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(Client::class, function (Application $app) {
             $config = $app->make(Config::class);
 
-            return new Client($app->make(Factory::class), fn (): ?string => $config->token(), $config->apiUrl());
+            return new Client(
+                $app->make(Factory::class),
+                fn (): ?string => $config->token(),
+                $config->apiUrl(),
+                userAgent: 'glimpse-cli/'.config('app.version'),
+            );
         });
     }
 }
