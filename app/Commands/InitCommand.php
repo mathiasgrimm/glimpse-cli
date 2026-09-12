@@ -145,7 +145,7 @@ class InitCommand extends Command
               - name: Check and optimize reported images
                 shell: bash
                 env:
-                  # Optional. Personal tokens provide higher limits and personal usage tracking.
+                  # Optional. Personal tokens provide higher limits.
                   GLIMPSE_TOKEN: ${{ secrets.GLIMPSE_TOKEN }}
                 run: |
                   # Check exits 1 for both reported images and checking errors.
