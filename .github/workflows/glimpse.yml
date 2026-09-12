@@ -1,28 +1,24 @@
-name: Glimpse
+name: Automatic image optimization by Glimpse
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  pull_request_target:
+    types: [closed]
+  pull_request_review_comment:
+    types: [created]
 
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
 
+# In Settings → Actions → General → Workflow permissions, enable
+# "Allow GitHub Actions to create and approve pull requests".
 jobs:
-  check-images:
-    runs-on: ubuntu-latest
-    env:
-      # Optional. Without it (for example on fork pull requests, which
-      # never receive secrets) the CLI uses its built-in public token,
-      # which supports image commands with shared limits.
-      GLIMPSE_TOKEN: ${{ secrets.GLIMPSE_TOKEN }}
-    steps:
-      - name: Set up PHP and cpx
-        uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45 # v2
-        with:
-          php-version: '8.5'
-          tools: cpx/cpx
-          coverage: none
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Check images
-        run: cpx --skip-local mathiasgrimm/glimpse-cli check .
+  optimize-images:
+    if: github.event_name == 'pull_request_target' && github.event.pull_request.merged == true
+    uses: mathiasgrimm/glimpse-cli/.github/workflows/optimize-images.yml@v1
+    secrets:
+      GLIMPSE_TOKEN: ${{ secrets.GLIMPSE_TOKEN }} # Optional
+
+  skip-image:
+    if: github.event_name == 'pull_request_review_comment' && github.event.comment.body == 'glimpse skip'
+    uses: mathiasgrimm/glimpse-cli/.github/workflows/skip-image.yml@v1

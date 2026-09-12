@@ -1,18 +1,5 @@
 <!DOCTYPE html>
-<!--
-  Source for art/banner.avif (two frames, blinking status dot in the kicker).
-  Render each frame with headless Chrome, build a gif, and let glimpse
-  itself produce the animated AVIF:
-
-    chrome --headless --hide-scrollbars --force-device-scale-factor=2 \
-      --window-size=1600,420 --screenshot=frame-on.png  banner.html#on
-    chrome ... --screenshot=frame-off.png banner.html#off
-    magick -delay 50 -loop 0 frame-on.png frame-off.png banner.gif
-    glimpse convert banner.gif --format=avif -o banner.avif
-
-  The size printed inside the terminal card must match the real output of
-  `glimpse convert frame-on.png --format=avif`; re-run until it converges.
--->
+<!-- Source for banner.avif. Render at 1600x420 with a 2x scale. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -129,7 +116,7 @@
 
   .term {
     position: relative;
-    width: 560px;
+    width: 640px;
     background: var(--surface);
     border: 1px solid var(--border);
     box-shadow: 0 0 0 1px rgba(96,136,213,.08), 0 24px 60px -20px rgba(0,0,0,.8);
@@ -179,7 +166,7 @@
         <div class="name">glimpse</div>
       </div>
       <div class="tagline">Ship smaller images.<br><span class="accent">Skip the toolchain.</span></div>
-      <div class="sub">Convert, optimize, resize, thumbnail and inspect images from your<br>terminal, with <span class="g">zero</span> image binaries installed on your machine.</div>
+      <div class="sub">Optimize images from your terminal and GitHub Actions.<br>No account or token needed.</div>
     </div>
 
     <div class="term">
@@ -188,10 +175,7 @@
         <span class="label">bash</span>
       </div>
       <div class="body">
-        <div><span class="p">$</span> <span class="c">composer global require mathiasgrimm/glimpse-cli</span></div>
-        <div><span class="p">$</span> <span class="c">glimpse auth</span></div>
-        <div><span class="p">$</span> <span class="c">glimpse convert banner.png <span class="o">--format=avif</span></span></div>
-        <div><span class="ok">Wrote banner.avif (image/avif, 24.2 KB, 3200x840)</span></div>
+        <div><span class="p">$</span> <span class="c">cpx mathiasgrimm/glimpse-cli</span> <span class="o">optimize photo.jpg</span></div>
       </div>
     </div>
   </div>

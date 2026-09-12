@@ -18,11 +18,10 @@
 
 ---
 
-Shipping images means wrangling ImageMagick, libvips, mozjpeg, cwebp and avifenc: compiled binaries that differ between your laptop, your teammate's laptop, and CI. **glimpse replaces all of them with one command**, with zero binary dependencies. The heavy lifting happens on the [Glimpse API](https://glimpseimg.com): stateless, nothing stored, your bytes never linger. You install a single CLI and go:
+Shipping images means wrangling ImageMagick, libvips, mozjpeg, cwebp and avifenc: compiled binaries that differ between your laptop, your teammate's laptop, and CI. **glimpse replaces all of them with one command**, with zero binary dependencies. The heavy lifting happens on the [Glimpse API](https://glimpseimg.com): stateless, nothing stored, your bytes never linger. Run it with [cpx](https://github.com/laravel/cpx#installation):
 
 ```bash
-composer global require mathiasgrimm/glimpse-cli
-glimpse convert banner.png --format=avif
+cpx mathiasgrimm/glimpse-cli convert banner.png --format=avif
 ```
 
 ```
@@ -31,7 +30,8 @@ Wrote banner.avif (image/avif, 24.2 KB, 3200x840)
 
 Image commands work with the built-in public token. Use `glimpse auth` or set `GLIMPSE_TOKEN` for higher limits. Account and usage commands require a personal token. Both workflow modes can run without `GLIMPSE_TOKEN`. Transform and info commands upload your image; analyze and check send image measurements.
 
-That's a real session: `banner.png` is a frame of the banner at the top of this page, re-encoded from 360.3 KB down to 24.2 KB. The banner you are actually looking at goes one step further; it is a two-frame animated AVIF (watch the green dot blink) that glimpse converted from a GIF, 40.1 KB in total. Want to know what a conversion will buy you *before* you convert? `glimpse analyze` predicts the output size for every format **without uploading your image**:
+Use `glimpse analyze` to estimate the output size for each format before
+converting. It sends image measurements without uploading your image:
 
 <p align="center">
   <img src="art/terminal.avif" alt="glimpse analyze and convert running in a terminal" width="100%">
@@ -43,11 +43,35 @@ Run `glimpse` with no arguments to see everything it can do:
   <img src="art/cli-banner.avif" alt="the glimpse banner and command list printed when running glimpse without arguments" width="100%">
 </p>
 
+## Keep an original image
+
+From your Git repository root, restore an image and skip it in future checks:
+
+```bash
+cpx mathiasgrimm/glimpse-cli skip public/img/hero.png
+```
+
+This restores the image from `HEAD` and records `via: "skip"` in the baseline.
+Use `--from=COMMIT` to restore from another commit. The original must exist
+in Git. If it does not, the command leaves the file unchanged.
+The image stays skipped until its contents change.
+
+On an automatic optimization PR, open **Files changed** and add an inline
+comment on the image:
+
+```text
+glimpse skip
+```
+
+The workflow restores the original and updates the same PR. You need
+repository write access. See [automatic optimization](https://glimpseimg.com/docs/cli/automatic-optimization)
+for setup and details.
+
 ## Documentation
 
 The full documentation lives at **[glimpseimg.com/docs/cli](https://glimpseimg.com/docs/cli)**:
 
-- [Installation](https://glimpseimg.com/docs/cli/installation): Composer, the standalone PHAR, and `self-update`.
+- [Installation](https://glimpseimg.com/docs/cli/installation): cpx, the standalone PHAR, and `self-update`.
 - [Authentication](https://glimpseimg.com/docs/cli/authentication): `glimpse auth` and the environment variables.
 - [Commands](https://glimpseimg.com/docs/cli/commands): convert, optimize, resize, thumbnail, analyze, info, and usage.
 - [Project files](https://glimpseimg.com/docs/cli/project-setup): `glimpse init`, `glimpse check`, `glimpse skip`, `.glimpseignore`, and the baseline.
@@ -56,7 +80,7 @@ The full documentation lives at **[glimpseimg.com/docs/cli](https://glimpseimg.c
 
 Adding glimpse to an existing project? Follow [Add Glimpse to Your Project](https://glimpseimg.com/docs/add-to-your-project); it goes from install to a CI gate in about ten minutes.
 
-This repository runs the same gate on itself: see [`.github/workflows/images.yml`](.github/workflows/images.yml).
+This repository uses automatic image optimization: see [`.github/workflows/glimpse.yml`](.github/workflows/glimpse.yml).
 
 ## Development
 
@@ -89,6 +113,6 @@ glimpse-cli is open-source software licensed under the [MIT license](LICENSE).
 ---
 
 <p align="center">
-  <sub>Every image on this page was converted by glimpse itself, including the animated banner (GIF in, animated AVIF out).<br>
-  Grab a free API key at <a href="https://glimpseimg.com"><strong>glimpseimg.com</strong></a> (<strong>Settings → API Tokens</strong>).</sub>
+  <sub>Image commands work without an account or a token of your own.<br>
+  Visit <a href="https://glimpseimg.com"><strong>glimpseimg.com</strong></a> for the docs and optional personal tokens.</sub>
 </p>
