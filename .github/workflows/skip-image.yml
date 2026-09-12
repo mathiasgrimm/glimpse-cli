@@ -29,10 +29,8 @@ jobs:
             if (!['admin', 'maintain', 'write'].includes(access.permission)) {
               throw new Error('Only users with repository write access can skip images.');
             }
-            if (pr.state !== 'open' || pr.user.login !== 'github-actions[bot]' ||
-                pr.head.repo?.full_name !== `${owner}/${repo}` ||
-                pr.head.ref !== `automation/glimpse-${pr.base.ref}`) {
-              throw new Error('This command only works on open Glimpse optimization PRs in this repository.');
+            if (pr.state !== 'open' || pr.head.repo?.full_name !== `${owner}/${repo}`) {
+              throw new Error('This command only works on open PRs in this repository.');
             }
             if (comment.commit_id !== pr.head.sha) {
               throw new Error('The PR changed since this comment. Review the latest image and comment again.');

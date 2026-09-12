@@ -62,7 +62,11 @@ let permission = 'write';
 if (scenario === 'reader') permission = 'read';
 if (scenario === 'closed') pr.state = 'closed';
 if (scenario === 'fork') pr.head.repo.full_name = 'fork/repo';
-if (scenario === 'manual') pr.user.login = 'writer';
+if (scenario.startsWith('manual')) { pr.user.login = 'writer'; pr.head.ref = 'add-glimpse'; }
+if (scenario === 'manual-reader') permission = 'read';
+if (scenario === 'manual-source') pr.body = '';
+if (scenario === 'manual-fork') pr.head.repo.full_name = 'fork/repo';
+if (scenario === 'manual-stale') comment.commit_id = 'c'.repeat(40);
 if (scenario === 'branch') pr.head.ref = 'feature';
 if (scenario === 'stale') comment.commit_id = 'c'.repeat(40);
 if (scenario === 'source') pr.body = '';
@@ -89,11 +93,12 @@ JS;
     }
 })->with([
     ['valid', true], ['newline', true], ['reader', false], ['closed', false],
-    ['fork', false], ['manual', false], ['branch', false], ['stale', false],
+    ['fork', false], ['manual', true], ['branch', true], ['stale', false],
+    ['manual-reader', false], ['manual-source', false], ['manual-fork', false], ['manual-stale', false],
     ['source', false], ['traversal', false], ['absolute', false], ['code', false],
 ]);
 
-test('the restore step commits only the selected image and baseline and refuses a changed remote head', function (bool $stale) {
+test('the restore step commits only the selected image and baseline and refuses a changed remote head', function (bool $stale, string $branch) {
     chdirWorkspace();
     $git = function (array $arguments): string {
         $process = new Process(['git', '-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...$arguments], workspace());
@@ -103,7 +108,7 @@ test('the restore step commits only the selected image and baseline and refuses 
     };
     $remote = $this->configHome.'/remote.git';
     $git(['init', '--bare', $remote]);
-    $git(['init', '-b', 'automation/glimpse-main']);
+    $git(['init', '-b', $branch]);
     $name = "images/a space\n\$(echo unsafe).png";
     mkdir(workspace().'/images');
     file_put_contents(workspace().'/'.$name, Images::png());
@@ -122,7 +127,7 @@ test('the restore step commits only the selected image and baseline and refuses 
         $git(['commit', '-qm', 'Newer edit']);
         $git(['push', 'origin', 'HEAD']);
     }
-    $remoteHead = $git(['--git-dir='.$remote, 'rev-parse', 'refs/heads/automation/glimpse-main']);
+    $remoteHead = $git(['--git-dir='.$remote, 'rev-parse', 'refs/heads/'.$branch]);
     $git(['checkout', '--detach', $head]);
     file_put_contents(workspace().'/unrelated.txt', 'Do not commit');
 
@@ -134,7 +139,7 @@ test('the restore step commits only the selected image and baseline and refuses 
         'PATH' => $this->configHome.':'.getenv('PATH'),
         'GLIMPSE_SKIP_SOURCE' => $source,
         'GLIMPSE_SKIP_HEAD' => $head,
-        'GLIMPSE_SKIP_BRANCH' => 'automation/glimpse-main',
+        'GLIMPSE_SKIP_BRANCH' => $branch,
         'GLIMPSE_SKIP_PATH' => $name,
     ]);
     $process->run();
@@ -144,9 +149,9 @@ test('the restore step commits only the selected image and baseline and refuses 
         ->and($git(['diff-tree', '--no-commit-id', '--name-only', '-r', '-z', 'HEAD']))
         ->toBe('.glimpse-baseline.json'."\0".$name)
         ->and(file_exists(workspace().'/unsafe'))->toBeFalse();
-    $updatedHead = $git(['--git-dir='.$remote, 'rev-parse', 'refs/heads/automation/glimpse-main']);
+    $updatedHead = $git(['--git-dir='.$remote, 'rev-parse', 'refs/heads/'.$branch]);
     expect($updatedHead)->toBe($stale ? $remoteHead : $git(['rev-parse', 'HEAD']));
-})->with([false, true]);
+})->with([[false, 'automation/glimpse-main'], [false, 'add-glimpse'], [true, 'add-glimpse']]);
 
 test('the init template calls the published reusable workflows without embedding their steps', function () {
     preg_match_all('~uses: mathiasgrimm/glimpse-cli/(\.github/workflows/[^@]+)@([^\s]+)~', InitCommand::OPTIMIZE_TEMPLATE, $matches, PREG_SET_ORDER);
