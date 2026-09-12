@@ -4,10 +4,10 @@ use MathiasGrimm\GlimpseCli\Commands\InitCommand;
 use Symfony\Component\Process\Process;
 use Tests\Fixtures\Images;
 
-test('the optimization workflow runs check --fix and preserves its exit status', function (int $status) {
+test('the optimization workflow runs check --fix and preserves its exit status', function (int $status, string $quality, string $threshold) {
     chdirWorkspace();
-    preg_match('/^ +run: (cpx .+)$/m', InitCommand::OPTIMIZE_TEMPLATE, $matches);
-    expect($matches[1])->toBe('cpx --skip-local mathiasgrimm/glimpse-cli check . --fix');
+    $workflow = file_get_contents(base_path('.github/workflows/optimize-images.yml'));
+    preg_match('/run: \|\n((?: +[^\n]*\n)+)/', $workflow, $matches);
 
     $executable = $this->configHome.'/cpx';
     file_put_contents($executable, '#!'.PHP_BINARY."\n".file_get_contents(base_path('tests/Fixtures/WorkflowGlimpse.php')));
@@ -18,16 +18,24 @@ test('the optimization workflow runs check --fix and preserves its exit status',
         'WORKFLOW_CALLS' => $this->configHome.'/calls',
         'WORKFLOW_STATUS' => (string) $status,
         'GLIMPSE_TOKEN' => '',
+        'GLIMPSE_QUALITY' => $quality,
+        'GLIMPSE_THRESHOLD' => $threshold,
     ]);
     $process->run();
 
+    $expected = ['--skip-local', 'mathiasgrimm/glimpse-cli', 'check', '.', '--fix', '--threshold='.$threshold];
+    if ($quality !== '') {
+        $expected[] = '--quality='.$quality;
+    }
+
     expect($process->getExitCode())->toBe($status)
         ->and(json_decode(file_get_contents($this->configHome.'/calls'), true))
-        ->toBe(['--skip-local', 'mathiasgrimm/glimpse-cli', 'check', '.', '--fix']);
-})->with([0, 1, 2]);
+        ->toBe($expected)
+        ->and(file_exists(workspace().'/unsafe'))->toBeFalse();
+})->with([0, 1, 2])->with([['', '10'], ['85', '25.5'], ['85; touch unsafe', '10']]);
 
 test('the optimization workflow sets up cpx with PHP 8.5', function () {
-    expect(InitCommand::OPTIMIZE_TEMPLATE)
+    expect(file_get_contents(base_path('.github/workflows/optimize-images.yml')))
         ->toContain("php-version: '8.5'", 'tools: cpx/cpx')
         ->not->toContain('composer global', 'jq ', '--quality=85');
 });
@@ -39,7 +47,7 @@ test('the check-only workflow uses cpx and remains read-only', function () {
 });
 
 test('the comment handler validates the writer PR source and image before checkout', function (string $scenario, bool $allowed) {
-    preg_match('/script: \|\n((?: +[^\n]*\n)+)/', InitCommand::OPTIMIZE_TEMPLATE, $matches);
+    preg_match('/script: \|\n((?: +[^\n]*\n)+)/', file_get_contents(base_path('.github/workflows/skip-image.yml')), $matches);
     $script = $matches[1];
     $harness = <<<'JS'
 const scenario = process.argv[1];
@@ -118,7 +126,7 @@ test('the restore step commits only the selected image and baseline and refuses 
     $executable = $this->configHome.'/cpx';
     file_put_contents($executable, "#!/bin/bash\nshift 2\nexec ".escapeshellarg(PHP_BINARY).' '.escapeshellarg(base_path('glimpse')).' "$@"'."\n");
     chmod($executable, 0755);
-    preg_match('/name: Restore the image and commit its skip entry\n +shell: bash\n +run: \|\n((?: +[^\n]*\n)+)/', InitCommand::OPTIMIZE_TEMPLATE, $matches);
+    preg_match('/name: Restore the image and commit its skip entry\n +shell: bash\n +run: \|\n((?: +[^\n]*\n)+)/', file_get_contents(base_path('.github/workflows/skip-image.yml')), $matches);
     $process = new Process(['bash', '-eo', 'pipefail', '-c', $matches[1]], workspace(), [
         'PATH' => $this->configHome.':'.getenv('PATH'),
         'GLIMPSE_SKIP_SOURCE' => $source,
@@ -136,3 +144,13 @@ test('the restore step commits only the selected image and baseline and refuses 
     $updatedHead = $git(['--git-dir='.$remote, 'rev-parse', 'refs/heads/automation/glimpse-main']);
     expect($updatedHead)->toBe($stale ? $remoteHead : $git(['rev-parse', 'HEAD']));
 })->with([false, true]);
+
+test('the init template calls the published reusable workflows without embedding their steps', function () {
+    preg_match_all('~uses: mathiasgrimm/glimpse-cli/(\.github/workflows/[^@]+)@([^\s]+)~', InitCommand::OPTIMIZE_TEMPLATE, $matches, PREG_SET_ORDER);
+    expect($matches)->toHaveCount(2);
+    foreach ($matches as $match) {
+        expect(file_get_contents(base_path($match[1])))->toContain('workflow_call:')
+            ->and($match[2])->toBe('v1.8.0');
+    }
+    expect(InitCommand::OPTIMIZE_TEMPLATE)->not->toContain('runs-on:', 'steps:', 'script:', 'run:');
+});

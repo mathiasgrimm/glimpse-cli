@@ -1,0 +1,86 @@
+name: Optimize images
+
+on:
+  workflow_call:
+    inputs:
+      quality:
+        description: Optional re-encode quality (1-100). Omit to use the optimizer default.
+        type: string
+        required: false
+        default: ''
+      threshold:
+        description: Minimum estimated saving percentage used to select images.
+        type: number
+        required: false
+        default: 10
+    secrets:
+      GLIMPSE_TOKEN:
+        description: Optional personal Glimpse token for higher limits.
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  optimize-images:
+    if: github.event_name == 'pull_request_target' && github.event.pull_request.merged == true
+    concurrency:
+      group: glimpse-optimize-${{ github.event.pull_request.base.ref }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Set up PHP and cpx
+        uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45 # v2
+        with:
+          php-version: '8.5'
+          tools: cpx/cpx
+          coverage: none
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/heads/${{ github.event.pull_request.base.ref }}
+          persist-credentials: false
+
+      - name: Remember the original commit
+        id: original
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Check and optimize reported images
+        shell: bash
+        env:
+          # Optional. Personal tokens provide higher limits.
+          GLIMPSE_TOKEN: ${{ secrets.GLIMPSE_TOKEN }}
+          GLIMPSE_QUALITY: ${{ inputs.quality }}
+          GLIMPSE_THRESHOLD: ${{ inputs.threshold }}
+        run: |
+          args=(check . --fix --threshold="$GLIMPSE_THRESHOLD")
+          if [[ -n "$GLIMPSE_QUALITY" ]]; then
+            args+=(--quality="$GLIMPSE_QUALITY")
+          fi
+          cpx --skip-local mathiasgrimm/glimpse-cli "${args[@]}"
+
+      # In Settings → Actions → General → Workflow permissions, enable
+      # "Allow GitHub Actions to create and approve pull requests".
+      - name: Open or update the optimization PR
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          base: ${{ github.event.pull_request.base.ref }}
+          branch: automation/glimpse-${{ github.event.pull_request.base.ref }}
+          title: Optimize images
+          commit-message: Optimize images
+          body: |
+            Optimize images reported by Glimpse, keeping their formats and filenames.
+
+            To keep an original image, add an inline comment on that file: `glimpse skip`.
+            Users with write access can do this. The workflow restores the original and updates this PR.
+            Future checks skip that image until its contents change.
+
+            Or run from the repository root on this PR's branch:
+            `cpx mathiasgrimm/glimpse-cli skip path/to/image.png --from=${{ steps.original.outputs.sha }}`
+            Then commit the image and `.glimpse-baseline.json` together.
+
+            <!-- glimpse-source: ${{ steps.original.outputs.sha }} -->
+          delete-branch: true
