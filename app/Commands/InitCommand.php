@@ -126,13 +126,13 @@ class InitCommand extends Command
         jobs:
           optimize-images:
             if: github.event_name == 'pull_request_target' && github.event.pull_request.merged == true
-            uses: mathiasgrimm/glimpse-cli/.github/workflows/optimize-images.yml@v1.8.0
+            uses: mathiasgrimm/glimpse-cli/.github/workflows/optimize-images.yml@v1
             secrets:
               GLIMPSE_TOKEN: ${{ secrets.GLIMPSE_TOKEN }} # Optional
 
           skip-image:
             if: github.event_name == 'pull_request_review_comment' && github.event.comment.body == 'glimpse skip'
-            uses: mathiasgrimm/glimpse-cli/.github/workflows/skip-image.yml@v1.8.0
+            uses: mathiasgrimm/glimpse-cli/.github/workflows/skip-image.yml@v1
         YAML;
 
     /**

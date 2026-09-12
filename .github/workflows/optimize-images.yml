@@ -62,7 +62,7 @@ jobs:
           if [[ -n "$GLIMPSE_QUALITY" ]]; then
             args+=(--quality="$GLIMPSE_QUALITY")
           fi
-          cpx --skip-local mathiasgrimm/glimpse-cli "${args[@]}"
+          cpx --skip-local mathiasgrimm/glimpse-cli:^1.8 "${args[@]}"
 
       # In Settings → Actions → General → Workflow permissions, enable
       # "Allow GitHub Actions to create and approve pull requests".

@@ -23,7 +23,7 @@ test('the optimization workflow runs check --fix and preserves its exit status',
     ]);
     $process->run();
 
-    $expected = ['--skip-local', 'mathiasgrimm/glimpse-cli', 'check', '.', '--fix'];
+    $expected = ['--skip-local', 'mathiasgrimm/glimpse-cli:^1.8', 'check', '.', '--fix'];
     if ($threshold !== '') {
         $expected[] = '--threshold='.$threshold;
     }
@@ -153,7 +153,7 @@ test('the init template calls the published reusable workflows without embedding
     expect($matches)->toHaveCount(2);
     foreach ($matches as $match) {
         expect(file_get_contents(base_path($match[1])))->toContain('workflow_call:')
-            ->and($match[2])->toBe('v1.8.0');
+            ->and($match[2])->toBe('v1');
     }
     expect(InitCommand::OPTIMIZE_TEMPLATE)->not->toContain('runs-on:', 'steps:', 'script:', 'run:');
 });

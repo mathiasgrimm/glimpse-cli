@@ -1,4 +1,4 @@
-.PHONY: test build release check-version check-public-token verify-phar
+.PHONY: test build release check-version check-public-token verify-phar update-major-tag
 
 # Usage:
 #   make test                        run Pint, PHPStan, and the Pest suite
@@ -44,8 +44,18 @@ release: check-version check-public-token
 	git add builds/glimpse
 	git commit -m "Build $(VERSION)"
 	git push
-	gh release create $(VERSION) builds/glimpse --title $(VERSION) --generate-notes
+	gh release create $(VERSION) builds/glimpse --title $(VERSION) --generate-notes --target "$$(git rev-parse HEAD)"
+	$(MAKE) update-major-tag VERSION=$(VERSION)
 
 check-version:
 	@[ -n "$(VERSION)" ] || { echo "VERSION is required, e.g. make release VERSION=v0.2.1"; exit 1; }
 	@case "$(VERSION)" in v*) ;; *) echo "VERSION must be the tag name including the v prefix (see README)"; exit 1; ;; esac
+
+# Move only the compatible major alias after publishing a stable release.
+update-major-tag: check-version
+	@if printf '%s\n' "$(VERSION)" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$$'; then \
+		major="$$(printf '%s' "$(VERSION)" | cut -d. -f1)"; \
+		git push origin "HEAD:refs/tags/$$major" --force; \
+	else \
+		echo "Skipping the major alias for non-stable version $(VERSION)."; \
+	fi

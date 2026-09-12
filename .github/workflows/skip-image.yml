@@ -67,7 +67,7 @@ jobs:
         shell: bash
         run: |
           git merge-base --is-ancestor "$GLIMPSE_SKIP_SOURCE" HEAD
-          cpx --skip-local mathiasgrimm/glimpse-cli skip --from="$GLIMPSE_SKIP_SOURCE" -- "$GLIMPSE_SKIP_PATH"
+          cpx --skip-local mathiasgrimm/glimpse-cli:^1.8 skip --from="$GLIMPSE_SKIP_SOURCE" -- "$GLIMPSE_SKIP_PATH"
           git --literal-pathspecs add -- "$GLIMPSE_SKIP_PATH" .glimpse-baseline.json
           if ! git diff --cached --quiet; then
             git -c core.hooksPath=/dev/null -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Skip image optimization'
