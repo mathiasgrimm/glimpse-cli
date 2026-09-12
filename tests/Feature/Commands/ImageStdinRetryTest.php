@@ -4,7 +4,7 @@ use Symfony\Component\Process\Process;
 use Tests\Fixtures\Images;
 
 test('stdin survives a retry and binary stdout contains only the successful image', function () {
-    $root = dirname(__DIR__, 2);
+    $root = base_path();
     $process = new Process([PHP_BINARY, $root.'/tests/Fixtures/run-stdin-optimize.php'], $root, [
         'GLIMPSE_TOKEN' => false,
         'GLIMPSE_API_URL' => false,
