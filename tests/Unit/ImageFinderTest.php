@@ -34,7 +34,7 @@ test('skips dot-directories and dot-files', function () {
     expect((new ImageFinder)->find(workspace()))->toBe([workspace().'/photo.png']);
 });
 
-test('skips symlinked directories but follows symlinked image files', function () {
+test('skips symlinked directories and image files', function () {
     createImage('photo.png');
     $outside = createImage('../outside/linked.png');
 
@@ -42,7 +42,6 @@ test('skips symlinked directories but follows symlinked image files', function (
     symlink($outside, workspace().'/alias.png');
 
     expect((new ImageFinder)->find(workspace()))->toBe([
-        workspace().'/alias.png',
         workspace().'/photo.png',
     ]);
 });

@@ -426,6 +426,26 @@ describe('--fix', function () {
         Http::assertSentCount(2);
     })->with(['photo.jpeg', 'PHOTO.JPG', '-leading.jpeg', 'nested/space and "quote".jpeg', "newline\nimage.jpeg"]);
 
+    test('directory fixes do not read or modify external and ignored symlink targets', function (string $target) {
+        fakeAnalyze();
+        fakeTransform('optimize');
+        $image = createImage('photo.jpeg', Images::jpg().'padding');
+        $linked = createImage($target, Images::jpg().'do not touch');
+        file_put_contents(workspace().'/.glimpseignore', "ignored/\n");
+        symlink($linked, workspace().'/alias.jpeg');
+        writeBaseline();
+
+        expect(Artisan::call('check', ['input' => '.', '--fix' => true, '--json' => true]))->toBe(0);
+        $report = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+
+        expect($report['fixed'])->toBe(['photo.jpeg'])
+            ->and(file_get_contents($image))->toBe(Images::jpg())
+            ->and(file_get_contents($linked))->toBe(Images::jpg().'do not touch')
+            ->and(is_link(workspace().'/alias.jpeg'))->toBeTrue()
+            ->and(baselineFiles())->toBe(['photo.jpeg' => baselineEntry($image, 'optimize')]);
+        Http::assertSentCount(2);
+    })->with(['../outside.jpeg', 'ignored/target.jpeg']);
+
     test('passes explicit quality to optimize without changing checking estimates', function () {
         fakeAnalyze();
         fakeTransform('optimize');

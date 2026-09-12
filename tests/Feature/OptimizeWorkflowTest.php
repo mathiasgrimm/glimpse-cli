@@ -45,7 +45,7 @@ test('the optimization workflow sets up cpx with PHP 8.5', function () {
 
 test('the check-only workflow uses cpx and remains read-only', function () {
     expect(InitCommand::WORKFLOW_TEMPLATE)
-        ->toContain("php-version: '8.5'", 'tools: cpx/cpx', 'run: cpx mathiasgrimm/glimpse-cli check .')
+        ->toContain("php-version: '8.5'", 'tools: cpx/cpx', 'contents: read', 'run: cpx --skip-local mathiasgrimm/glimpse-cli check .')
         ->not->toContain('--fix', 'composer global');
 });
 

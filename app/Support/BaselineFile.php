@@ -284,7 +284,11 @@ final class BaselineFile
      */
     private static function writeAtomically(string $path, string $data): void
     {
-        $tmp = $path.'.'.getmypid().'.tmp';
+        $tmp = @tempnam(dirname($path), basename($path).'.');
+
+        if ($tmp === false) {
+            throw new ApiException("Could not write {$path}.");
+        }
 
         try {
             if (@file_put_contents($tmp, $data) !== strlen($data)) {
