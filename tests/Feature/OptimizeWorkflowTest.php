@@ -23,7 +23,10 @@ test('the optimization workflow runs check --fix and preserves its exit status',
     ]);
     $process->run();
 
-    $expected = ['--skip-local', 'mathiasgrimm/glimpse-cli', 'check', '.', '--fix', '--threshold='.$threshold];
+    $expected = ['--skip-local', 'mathiasgrimm/glimpse-cli', 'check', '.', '--fix'];
+    if ($threshold !== '') {
+        $expected[] = '--threshold='.$threshold;
+    }
     if ($quality !== '') {
         $expected[] = '--quality='.$quality;
     }
@@ -32,7 +35,7 @@ test('the optimization workflow runs check --fix and preserves its exit status',
         ->and(json_decode(file_get_contents($this->configHome.'/calls'), true))
         ->toBe($expected)
         ->and(file_exists(workspace().'/unsafe'))->toBeFalse();
-})->with([0, 1, 2])->with([['', '10'], ['85', '25.5'], ['85; touch unsafe', '10']]);
+})->with([0, 1, 2])->with([['', ''], ['', '0'], ['85', '25.5'], ['85; touch unsafe', '10']]);
 
 test('the optimization workflow sets up cpx with PHP 8.5', function () {
     expect(file_get_contents(base_path('.github/workflows/optimize-images.yml')))

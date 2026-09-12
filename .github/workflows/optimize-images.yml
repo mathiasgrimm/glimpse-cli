@@ -9,10 +9,10 @@ on:
         required: false
         default: ''
       threshold:
-        description: Minimum estimated saving percentage used to select images.
-        type: number
+        description: Optional minimum estimated saving percentage. Omit to use the CLI default.
+        type: string
         required: false
-        default: 10
+        default: ''
     secrets:
       GLIMPSE_TOKEN:
         description: Optional personal Glimpse token for higher limits.
@@ -55,7 +55,10 @@ jobs:
           GLIMPSE_QUALITY: ${{ inputs.quality }}
           GLIMPSE_THRESHOLD: ${{ inputs.threshold }}
         run: |
-          args=(check . --fix --threshold="$GLIMPSE_THRESHOLD")
+          args=(check . --fix)
+          if [[ -n "$GLIMPSE_THRESHOLD" ]]; then
+            args+=(--threshold="$GLIMPSE_THRESHOLD")
+          fi
           if [[ -n "$GLIMPSE_QUALITY" ]]; then
             args+=(--quality="$GLIMPSE_QUALITY")
           fi
