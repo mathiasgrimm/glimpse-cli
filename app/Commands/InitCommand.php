@@ -114,18 +114,19 @@ class InitCommand extends Command
         on:
           pull_request_target:
             types: [closed]
+          pull_request_review_comment:
+            types: [created]
 
         permissions:
           contents: write
           pull-requests: write
 
-        concurrency:
-          group: glimpse-optimize-${{ github.event.pull_request.base.ref }}
-          cancel-in-progress: false
-
         jobs:
           optimize-images:
-            if: github.event.pull_request.merged == true
+            if: github.event_name == 'pull_request_target' && github.event.pull_request.merged == true
+            concurrency:
+              group: glimpse-optimize-${{ github.event.pull_request.base.ref }}
+              cancel-in-progress: false
             runs-on: ubuntu-latest
             timeout-minutes: 30
             steps:
@@ -141,12 +142,16 @@ class InitCommand extends Command
                   ref: refs/heads/${{ github.event.pull_request.base.ref }}
                   persist-credentials: false
 
+              - name: Remember the original commit
+                id: original
+                run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
               - name: Check and optimize reported images
                 shell: bash
                 env:
                   # Optional. Personal tokens provide higher limits.
                   GLIMPSE_TOKEN: ${{ secrets.GLIMPSE_TOKEN }}
-                run: cpx mathiasgrimm/glimpse-cli check . --fix
+                run: cpx --skip-local mathiasgrimm/glimpse-cli check . --fix
 
               # In Settings → Actions → General → Workflow permissions, enable
               # "Allow GitHub Actions to create and approve pull requests".
@@ -158,8 +163,97 @@ class InitCommand extends Command
                   branch: automation/glimpse-${{ github.event.pull_request.base.ref }}
                   title: Optimize images
                   commit-message: Optimize images
-                  body: Optimize images reported by glimpse check, keeping their formats and filenames.
+                  body: |
+                    Optimize images reported by Glimpse, keeping their formats and filenames.
+
+                    To keep an original image, add an inline comment on that file: `glimpse skip`.
+                    Users with write access can do this. The workflow restores the original and updates this PR.
+                    Future checks skip that image until its contents change.
+
+                    Or run from the repository root on this PR's branch:
+                    `cpx mathiasgrimm/glimpse-cli skip path/to/image.png --from=${{ steps.original.outputs.sha }}`
+                    Then commit the image and `.glimpse-baseline.json` together.
+
+                    <!-- glimpse-source: ${{ steps.original.outputs.sha }} -->
                   delete-branch: true
+
+          skip-image:
+            if: github.event_name == 'pull_request_review_comment' && github.event.comment.body == 'glimpse skip'
+            concurrency:
+              group: glimpse-optimize-${{ github.event.pull_request.base.ref }}
+              cancel-in-progress: false
+            runs-on: ubuntu-latest
+            timeout-minutes: 10
+            steps:
+              # Only a current comment by a writer on a same-repository Glimpse PR may change files.
+              - name: Validate the comment and restore source
+                id: request
+                uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+                with:
+                  script: |
+                    const { owner, repo } = context.repo;
+                    const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: context.issue.number });
+                    const comment = context.payload.comment;
+                    const { data: access } = await github.rest.repos.getCollaboratorPermissionLevel({ owner, repo, username: comment.user.login });
+                    if (!['admin', 'maintain', 'write'].includes(access.permission)) {
+                      throw new Error('Only users with repository write access can skip images.');
+                    }
+                    if (pr.state !== 'open' || pr.user.login !== 'github-actions[bot]' ||
+                        pr.head.repo?.full_name !== `${owner}/${repo}` ||
+                        pr.head.ref !== `automation/glimpse-${pr.base.ref}`) {
+                      throw new Error('This command only works on open Glimpse optimization PRs in this repository.');
+                    }
+                    if (comment.commit_id !== pr.head.sha) {
+                      throw new Error('The PR changed since this comment. Review the latest image and comment again.');
+                    }
+                    const source = pr.body?.match(/<!-- glimpse-source: ([0-9a-f]{40}) -->/);
+                    if (!source) throw new Error('This PR has no recorded original commit.');
+                    const path = comment.path;
+                    if (!path || path.startsWith('/') || path.split('/').some(part => !part || part === '.' || part === '..' || part === '.git') ||
+                        path.includes('\\') || !/\.(avif|webp|png|jpe?g|gif)$/i.test(path)) {
+                      throw new Error('The comment must refer to an image inside the repository.');
+                    }
+                    core.setOutput('head', pr.head.sha);
+                    core.exportVariable('GLIMPSE_SKIP_HEAD', pr.head.sha);
+                    core.exportVariable('GLIMPSE_SKIP_BRANCH', pr.head.ref);
+                    core.exportVariable('GLIMPSE_SKIP_SOURCE', source[1]);
+                    core.exportVariable('GLIMPSE_SKIP_PATH', path);
+
+              - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+                with:
+                  ref: ${{ steps.request.outputs.head }}
+                  fetch-depth: 0
+
+              - name: Set up PHP and cpx
+                uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45 # v2
+                with:
+                  php-version: '8.5'
+                  tools: cpx/cpx
+                  coverage: none
+
+              # Use the published CLI, never an executable from the checked-out PR.
+              - name: Restore the image and commit its skip entry
+                shell: bash
+                run: |
+                  git merge-base --is-ancestor "$GLIMPSE_SKIP_SOURCE" HEAD
+                  cpx --skip-local mathiasgrimm/glimpse-cli skip --from="$GLIMPSE_SKIP_SOURCE" -- "$GLIMPSE_SKIP_PATH"
+                  git --literal-pathspecs add -- "$GLIMPSE_SKIP_PATH" .glimpse-baseline.json
+                  if ! git diff --cached --quiet; then
+                    git -c core.hooksPath=/dev/null -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Skip image optimization'
+                    # The lease refuses the push if anyone changed the PR after validation.
+                    git push --force-with-lease="refs/heads/$GLIMPSE_SKIP_BRANCH:$GLIMPSE_SKIP_HEAD" origin "HEAD:refs/heads/$GLIMPSE_SKIP_BRANCH"
+                  fi
+
+              - name: Confirm the image was skipped
+                uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+                with:
+                  script: |
+                    await github.rest.pulls.createReplyForReviewComment({
+                      ...context.repo,
+                      pull_number: context.issue.number,
+                      comment_id: context.payload.comment.id,
+                      body: 'Restored the original image and recorded `via: "skip"` in the baseline. Future checks skip it until its contents change.',
+                    });
         YAML;
 
     /**
