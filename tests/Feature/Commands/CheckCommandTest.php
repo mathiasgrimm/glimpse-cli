@@ -1,8 +1,10 @@
 <?php
 
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
 use MathiasGrimm\GlimpseCli\Glimpse\Config;
+use Tests\Fixtures\Images;
 
 beforeEach(function () {
     putenv('GLIMPSE_TOKEN=test-token');
@@ -365,4 +367,155 @@ test('fails with an auth error when no token is configured', function () {
         ->and(Artisan::output())->toContain('Not authenticated. Run: glimpse auth');
 
     Http::assertNothingSent();
+});
+
+describe('--fix', function () {
+    beforeEach(function () {
+        chdirWorkspace();
+        Http::preventStrayRequests();
+    });
+
+    test('checks every image before optimizing only flagged files with the optimize default', function () {
+        $first = createImage('first.jpeg', Images::jpg().'padding');
+        $second = createImage('second.jpeg', Images::jpg().'padding');
+        $requests = [];
+
+        Http::fake(function (Request $request) use (&$requests) {
+            $requests[] = $request->url();
+
+            if (str_ends_with($request->url(), '/analyze')) {
+                $response = fakeAnalyzeResponse();
+                if (count($requests) === 2) {
+                    foreach ($response['data'] as &$estimate) {
+                        $estimate['saved_percent'] = 0;
+                    }
+                }
+
+                return Http::response($response);
+            }
+
+            expect(count($requests))->toBe(3)
+                ->and($request->data())->not->toHaveKey('quality');
+
+            return Http::response(fakeTransformResponse());
+        });
+
+        expect(Artisan::call('check', ['input' => '.', '--fix' => true, '--json' => true]))->toBe(0);
+        $report = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+
+        expect($report['fixed'])->toBe(['first.jpeg'])
+            ->and($report['failed'])->toBe([])
+            ->and(file_get_contents($first))->toBe(Images::jpg())
+            ->and(file_get_contents($second))->toBe(Images::jpg().'padding')
+            ->and(file_exists(baselinePath()))->toBeFalse();
+    });
+
+    test('preserves filenames and updates the baseline so the next scan skips fixed images', function (string $filename) {
+        fakeAnalyze();
+        fakeTransform('optimize');
+        $path = createImage($filename, Images::jpg().'padding');
+        writeBaseline();
+
+        expect(Artisan::call('check', ['input' => '.', '--fix' => true]))->toBe(0)
+            ->and(file_get_contents($path))->toBe(Images::jpg())
+            ->and(baselineFiles())->toBe([$filename => baselineEntry($path, 'optimize')]);
+
+        expect(Artisan::call('check', ['input' => '.', '--fix' => true, '--json' => true]))->toBe(0);
+        $report = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+        expect($report['baseline_skipped'])->toBe(1)->and($report['fixed'])->toBe([]);
+        Http::assertSentCount(2);
+    })->with(['photo.jpeg', 'PHOTO.JPG', '-leading.jpeg', 'nested/space and "quote".jpeg', "newline\nimage.jpeg"]);
+
+    test('passes explicit quality to optimize without changing checking estimates', function () {
+        fakeAnalyze();
+        fakeTransform('optimize');
+        $path = createImage();
+
+        $this->artisan('check', ['input' => $path, '--fix' => true, '--quality' => '73'])
+            ->expectsOutputToContain('Optimized 1 image.')
+            ->assertExitCode(0);
+
+        Http::assertSent(fn (Request $request) => str_ends_with($request->url(), '/optimize') && $request['quality'] === 73);
+        Http::assertSent(fn (Request $request) => str_ends_with($request->url(), '/analyze') && ! array_key_exists('quality', $request->data()));
+    });
+
+    test('rejects invalid quality and quality without fix before requests', function (array $options, string $message) {
+        Http::fake();
+        $this->artisan('check', ['input' => createImage()] + $options)
+            ->expectsOutputToContain($message)
+            ->assertExitCode(1);
+        Http::assertNothingSent();
+    })->with([
+        'non-numeric quality' => [['--fix' => true, '--quality' => 'high'], 'The --quality option must be a number.'],
+        'quality without fix' => [['--quality' => '85'], '--quality requires --fix.'],
+    ]);
+
+    test('leaves every image untouched if checking any file fails', function () {
+        fakeAnalyze();
+        $path = createImage('good.png');
+        createImage('broken.png', 'broken');
+        writeBaseline();
+
+        expect(Artisan::call('check', ['input' => '.', '--fix' => true, '--json' => true]))->toBe(1);
+        $report = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+        expect($report['fixed'])->toBe([])
+            ->and($report['failed'][0]['file'])->toBe('broken.png')
+            ->and(file_get_contents($path))->toBe(Images::png())
+            ->and(baselineFiles())->toBe([]);
+        Http::assertSentCount(1);
+    });
+
+    test('respects ignore rules and the threshold when fixing', function () {
+        fakeAnalyze();
+        createImage('ignored.png');
+        createImage('within-threshold.png');
+        file_put_contents(workspace().'/.glimpseignore', 'ignored.png');
+
+        expect(Artisan::call('check', ['input' => '.', '--fix' => true, '--threshold' => '90', '--json' => true]))->toBe(0);
+        $report = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+        expect($report['total'])->toBe(1)->and($report['fixed'])->toBe([]);
+        Http::assertSentCount(1);
+    });
+
+    test('succeeds on an empty directory without making requests', function () {
+        Http::fake();
+        expect(Artisan::call('check', ['input' => '.', '--fix' => true, '--json' => true]))->toBe(0);
+        $report = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+        expect($report['total'])->toBe(0)->and($report['fixed'])->toBe([]);
+        Http::assertNothingSent();
+    });
+
+    test('retries optimization rate limits using the existing retry behavior', function () {
+        fakeAnalyze();
+        $sleeper = fakeSleeper();
+        Http::fake(['*/v1/optimize' => Http::sequence()
+            ->push(['message' => 'Too Many Requests'], 429, ['Retry-After' => '2'])
+            ->push(fakeTransformResponse())]);
+
+        $this->artisan('check', ['input' => createImage(), '--fix' => true])->assertExitCode(0);
+        expect($sleeper->delays)->toBe([2]);
+        Http::assertSentCount(3);
+    });
+
+    test('stops on an optimization failure and reports earlier successful writes', function () {
+        fakeAnalyze();
+        Http::fake(['*/v1/optimize' => Http::sequence()
+            ->push(fakeTransformResponse())
+            ->push(['message' => 'Optimization failed'], 500)]);
+        foreach (['a.jpeg', 'b.jpeg', 'c.jpeg'] as $name) {
+            createImage($name, Images::jpg().'padding');
+        }
+        writeBaseline();
+
+        expect(Artisan::call('check', ['input' => '.', '--fix' => true, '--json' => true]))->toBe(1);
+        $report = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+        expect($report['fixed'])->toBe(['a.jpeg'])
+            ->and($report['failed'][0]['file'])->toBe('b.jpeg')
+            ->and($report['failed'][0]['error'])->toContain('Optimization failed')
+            ->and(file_get_contents(workspace().'/a.jpeg'))->toBe(Images::jpg())
+            ->and(file_get_contents(workspace().'/b.jpeg'))->toBe(Images::jpg().'padding')
+            ->and(file_get_contents(workspace().'/c.jpeg'))->toBe(Images::jpg().'padding')
+            ->and(array_keys(baselineFiles()))->toBe(['a.jpeg']);
+        Http::assertSentCount(5);
+    });
 });

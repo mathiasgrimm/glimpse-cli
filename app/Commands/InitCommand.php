@@ -63,10 +63,8 @@ class InitCommand extends Command
      * when the template changes. The glimpseimg.com repo runs a
      * docs-drift workflow that compares the two and fails on mismatch.
      *
-     * The install goes through Composer so every CI run is counted as a
-     * Packagist install. The package declares no runtime dependencies
-     * (the bin is the committed phar), so the install only downloads the
-     * package itself; no cache step is worth the extra YAML.
+     * cpx installs the CLI through Composer and reuses its isolated copy.
+     * PHP and cpx are installed by setup-php in both workflow modes.
      *
      * The GLIMPSE_TOKEN secret is optional. When the env var is empty
      * (fork pull requests never receive repository secrets, and a fresh
@@ -95,13 +93,15 @@ class InitCommand extends Command
               # which supports image commands with shared limits.
               GLIMPSE_TOKEN: ${{ secrets.GLIMPSE_TOKEN }}
             steps:
-              - uses: actions/checkout@v6
-              - name: Install glimpse
-                run: |
-                  composer global require --no-interaction --no-progress mathiasgrimm/glimpse-cli
-                  composer global config bin-dir --absolute --quiet >> "$GITHUB_PATH"
+              - name: Set up PHP and cpx
+                uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45 # v2
+                with:
+                  php-version: '8.5'
+                  tools: cpx/cpx
+                  coverage: none
+              - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               - name: Check images
-                run: glimpse check .
+                run: cpx mathiasgrimm/glimpse-cli check .
 
         YAML;
 
@@ -129,13 +129,12 @@ class InitCommand extends Command
             runs-on: ubuntu-latest
             timeout-minutes: 30
             steps:
-              - name: Install glimpse
-                working-directory: ${{ runner.temp }}
-                env:
-                  COMPOSER_HOME: ${{ runner.temp }}/glimpse-composer
-                run: |
-                  composer global require --no-interaction --no-progress --no-plugins --no-scripts mathiasgrimm/glimpse-cli
-                  composer global config bin-dir --absolute --quiet >> "$GITHUB_PATH"
+              - name: Set up PHP and cpx
+                uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45 # v2
+                with:
+                  php-version: '8.5'
+                  tools: cpx/cpx
+                  coverage: none
 
               - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
                 with:
@@ -147,14 +146,7 @@ class InitCommand extends Command
                 env:
                   # Optional. Personal tokens provide higher limits.
                   GLIMPSE_TOKEN: ${{ secrets.GLIMPSE_TOKEN }}
-                run: |
-                  # Check exits 1 for both reported images and checking errors.
-                  glimpse check . --json > "$RUNNER_TEMP/glimpse-check.json" || test "$?" -eq 1
-                  jq -e '.failed == []' "$RUNNER_TEMP/glimpse-check.json" > /dev/null
-                  jq -j '.files[] | .file, "\u0000"' "$RUNNER_TEMP/glimpse-check.json" |
-                    while IFS= read -r -d '' file; do
-                      glimpse optimize "./$file" --quality=85 --output="./$file" --force
-                    done
+                run: cpx mathiasgrimm/glimpse-cli check . --fix
 
               - name: Open or update the optimization PR
                 uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
