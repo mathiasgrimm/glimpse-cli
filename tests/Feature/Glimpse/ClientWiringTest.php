@@ -34,3 +34,22 @@ test('a missing token fails before any HTTP request', function () {
 
     Http::assertNothingSent();
 });
+
+test('API requests identify the CLI and its running version', function (string $version) {
+    config(['app.version' => $version]);
+    putenv('GLIMPSE_TOKEN=test-token');
+    Http::fake([
+        '*/v1/info' => Http::response(['data' => []]),
+        '*/user' => Http::response(['id' => 7, 'name' => 'Mathias', 'email' => 'mathias@example.com', 'created_at' => '2025-11-03T09:30:00.000000Z']),
+    ]);
+
+    $client = app(Client::class);
+    $client->info(Images::png());
+    $client->user();
+
+    Http::assertSentCount(2);
+    Http::assertSent(fn (Request $request) => $request->url() === 'https://glimpseimg.com/api/v1/info'
+        && $request->hasHeader('User-Agent', 'glimpse-cli/'.$version));
+    Http::assertSent(fn (Request $request) => $request->url() === 'https://glimpseimg.com/api/user'
+        && $request->hasHeader('User-Agent', 'glimpse-cli/'.$version));
+})->with(['v1.7.2', 'versioned-user-agent']);
