@@ -114,52 +114,25 @@ class InitCommand extends Command
         on:
           pull_request_target:
             types: [closed]
+          pull_request_review_comment:
+            types: [created]
 
         permissions:
           contents: write
           pull-requests: write
 
-        concurrency:
-          group: glimpse-optimize-${{ github.event.pull_request.base.ref }}
-          cancel-in-progress: false
-
+        # In Settings → Actions → General → Workflow permissions, enable
+        # "Allow GitHub Actions to create and approve pull requests".
         jobs:
           optimize-images:
-            if: github.event.pull_request.merged == true
-            runs-on: ubuntu-latest
-            timeout-minutes: 30
-            steps:
-              - name: Set up PHP and cpx
-                uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45 # v2
-                with:
-                  php-version: '8.5'
-                  tools: cpx/cpx
-                  coverage: none
+            if: github.event_name == 'pull_request_target' && github.event.pull_request.merged == true
+            uses: mathiasgrimm/glimpse-cli/.github/workflows/optimize-images.yml@v1
+            secrets:
+              GLIMPSE_TOKEN: ${{ secrets.GLIMPSE_TOKEN }} # Optional
 
-              - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-                with:
-                  ref: refs/heads/${{ github.event.pull_request.base.ref }}
-                  persist-credentials: false
-
-              - name: Check and optimize reported images
-                shell: bash
-                env:
-                  # Optional. Personal tokens provide higher limits.
-                  GLIMPSE_TOKEN: ${{ secrets.GLIMPSE_TOKEN }}
-                run: cpx mathiasgrimm/glimpse-cli check . --fix
-
-              # In Settings → Actions → General → Workflow permissions, enable
-              # "Allow GitHub Actions to create and approve pull requests".
-              - name: Open or update the optimization PR
-                uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
-                with:
-                  token: ${{ secrets.GITHUB_TOKEN }}
-                  base: ${{ github.event.pull_request.base.ref }}
-                  branch: automation/glimpse-${{ github.event.pull_request.base.ref }}
-                  title: Optimize images
-                  commit-message: Optimize images
-                  body: Optimize images reported by glimpse check, keeping their formats and filenames.
-                  delete-branch: true
+          skip-image:
+            if: github.event_name == 'pull_request_review_comment' && github.event.comment.body == 'glimpse skip'
+            uses: mathiasgrimm/glimpse-cli/.github/workflows/skip-image.yml@v1
         YAML;
 
     /**

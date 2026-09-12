@@ -50,7 +50,7 @@ The full documentation lives at **[glimpseimg.com/docs/cli](https://glimpseimg.c
 - [Installation](https://glimpseimg.com/docs/cli/installation): Composer, the standalone PHAR, and `self-update`.
 - [Authentication](https://glimpseimg.com/docs/cli/authentication): `glimpse auth` and the environment variables.
 - [Commands](https://glimpseimg.com/docs/cli/commands): convert, optimize, resize, thumbnail, analyze, info, and usage.
-- [Project files](https://glimpseimg.com/docs/cli/project-setup): `glimpse init`, `glimpse check`, `.glimpseignore`, and the baseline.
+- [Project files](https://glimpseimg.com/docs/cli/project-setup): `glimpse init`, `glimpse check`, `glimpse skip`, `.glimpseignore`, and the baseline.
 - [Continuous integration](https://glimpseimg.com/docs/cli/continuous-integration): the scaffolded GitHub Actions workflow.
 - [Scripting](https://glimpseimg.com/docs/cli/scripting): stdin, stdout, `--json`, and clean pipes.
 
