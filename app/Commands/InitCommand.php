@@ -101,7 +101,7 @@ class InitCommand extends Command
                   coverage: none
               - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               - name: Check images
-                run: cpx mathiasgrimm/glimpse-cli check .
+                run: cpx --skip-local mathiasgrimm/glimpse-cli check .
 
         YAML;
 
