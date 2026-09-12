@@ -73,7 +73,7 @@ class InitCommand extends Command
      * repository may not have set it yet), the CLI falls back to its
      * built-in public token, which supports image commands with shared
      * rate limits. A repository's own secret
-     * gives higher limits and usage attribution.
+     * gives higher limits.
      */
     public const WORKFLOW_TEMPLATE = <<<'YAML'
         name: Glimpse
@@ -372,7 +372,7 @@ class InitCommand extends Command
         }
 
         if ($this->workflowWritten !== null) {
-            $steps[] = 'Optional: set the GLIMPSE_TOKEN secret for higher rate limits and usage attribution: gh secret set GLIMPSE_TOKEN';
+            $steps[] = 'Optional: set the GLIMPSE_TOKEN secret for higher rate limits: gh secret set GLIMPSE_TOKEN';
 
             if ($this->workflowWritten === 'optimize') {
                 $steps[] = 'Install the workflow on your default branch and allow GitHub Actions to create pull requests. Generated PR checks require approval.';

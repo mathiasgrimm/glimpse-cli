@@ -339,7 +339,7 @@ describe('workflow scaffolding', function () {
         $output = Artisan::output();
 
         expect($output)->toContain('Created '.InitCommand::WORKFLOW_PATH.'.')
-            ->and($output)->toContain('Optional: set the GLIMPSE_TOKEN secret for higher rate limits and usage attribution: gh secret set GLIMPSE_TOKEN')
+            ->and($output)->toContain('Optional: set the GLIMPSE_TOKEN secret for higher rate limits: gh secret set GLIMPSE_TOKEN')
             ->and($output)->toContain('Commit '.IgnoreFile::FILENAME.', '.BaselineFile::FILENAME.', and '.InitCommand::WORKFLOW_PATH.'.')
             ->and($output)->not->toContain('Gate new images in CI')
             ->and((string) file_get_contents(workflowPath()))->toBe(InitCommand::OPTIMIZE_TEMPLATE);
