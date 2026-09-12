@@ -109,7 +109,7 @@ class InitCommand extends Command
      * Complete post-merge workflow, also published in the automatic optimization docs.
      */
     public const OPTIMIZE_TEMPLATE = <<<'YAML'
-        name: Glimpse automatic optimization
+        name: Automatic image optimization
 
         on:
           pull_request_target:
